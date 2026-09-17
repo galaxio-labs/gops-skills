@@ -85,12 +85,12 @@ Secrets are NOT written to `.env`. Use `${SEC_xxx}` placeholders in `docker-comp
 
 ## Values / localize flow
 
-1. `sys update` resolves variables → `sys/merged_vars.yml` (system defaults), then `init_setting_value` → `values/sys_value.yml`.
+1. `sys update` resolves variables → `sys/merged_vars.yml` (system defaults) and initializes localize helper value files (`values/setting/mod_value.yml`). It does **not** write `values/sys_value.yml`; when that file is absent it prints a reference of the available variables (not persisted).
 2. `sys localize` builds `.env` = `sys/merged_vars.yml` defaults ⊕ `values/sys_value.yml` ⊕ `values/value.yml`.
 
-Both value files may be **partial**: list only the entries you want to override; the rest fall back to the system defaults. In an ops project, put your deltas in `values/<sys_name>/sys_value.yml`.
+Both value files are **optional and may be partial**: list only the entries you want to override; the rest fall back to the system defaults. In an ops project, put your deltas in `values/<sys_name>/sys_value.yml`.
 
-`sys localize` auto-runs `update` when `values/sys_value.yml` is missing, so a single `sys localize` is enough for a fresh system; `--only` skips the update step. Explicit `sys update` remains useful to pre-resolve before packaging.
+`sys localize` auto-runs `update` when the system variables are not resolved yet, so a single `sys localize` is enough for a fresh system; `--only` skips the update step. Explicit `sys update` remains useful to pre-resolve before packaging and to print the variable reference.
 
 Inside an ops project: when the system dir sits under a project root whose `ops-prj.yml` lists it, `sys localize` / `sys update` read and write the project values at `values/<sys_name>/` (resolved from `ops-prj.yml`), so customer values win even if `<sys>/values` is not a symlink. Run `gops prj reimport` to (re)establish the `<sys>/values` symlink.
 
