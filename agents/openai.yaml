@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gops Skills"
+  short_description: "Route Galaxy gops/gx tasks to focused skills"
+  default_prompt: "Use $gops-skills to work with gops (galaxy-ops) or gx (galaxy-flow) and choose the right nested skill."
