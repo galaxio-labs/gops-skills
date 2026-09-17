@@ -85,7 +85,7 @@ Secrets are NOT written to `.env`. Use `${SEC_xxx}` placeholders in `docker-comp
 
 ## Values / localize flow
 
-1. `sys update` resolves variables → `sys/merged_vars.yml` (system defaults) and initializes localize helper value files (`values/setting/mod_value.yml`). It does **not** write `values/sys_value.yml`; when that file is absent it prints a reference of the available variables (not persisted).
+1. `sys update` resolves variables → `sys/merged_vars.yml` (system defaults) and generates `values/sys_value.yml` as a **fully commented template** (inert by default): uncomment the entries you want to override.
 2. `sys localize` builds `.env` = `sys/merged_vars.yml` defaults ⊕ `values/sys_value.yml` ⊕ `values/value.yml`.
 
 Both value files are **optional and may be partial**: list only the entries you want to override; the rest fall back to the system defaults. In an ops project, put your deltas in `values/<sys_name>/sys_value.yml`.
