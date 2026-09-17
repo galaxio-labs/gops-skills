@@ -90,6 +90,8 @@ Secrets are NOT written to `.env`. Use `${SEC_xxx}` placeholders in `docker-comp
 
 `sys localize` auto-runs `update` when `values/sys_value.yml` is missing, so a single `sys localize` is enough for a fresh system; `--only` skips the update step. Explicit `sys update` remains useful to pre-resolve before packaging.
 
+Inside an ops project: when the system dir sits under a project root whose `ops-prj.yml` lists it, `sys localize` / `sys update` read and write the project values at `values/<sys_name>/` (resolved from `ops-prj.yml`), so customer values win even if `<sys>/values` is not a symlink. Run `gops prj reimport` to (re)establish the `<sys>/values` symlink.
+
 ## prj import / reimport
 
 - `prj import --path <pkg.tar.gz>` imports a packaged system (NOT a bare directory).
