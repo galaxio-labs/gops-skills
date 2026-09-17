@@ -9,7 +9,7 @@ Top-level collection for Galaxy project skills: `gops` (galaxy-ops) and `gx` (ga
 
 ## Routing
 
-- For `gops` — `gops mod/sys/prj`, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `resolved_vars.yml`, `values/value.yml` customer overrides, `prj reimport`, and value/localize flows — read `skills/gops-engineering/SKILL.md`.
+- For `gops` — `gops mod/sys/prj`, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `effective_vars.yml`, `values/value.yml` customer overrides, `prj reimport`, and value/localize flows — read `skills/gops-engineering/SKILL.md`.
 - For `gx` — `gx run/adm/init/mod/doc/check/self`, GXL workflow authoring, built-in `gx.*` capabilities, and `_gal/` conventions — read `skills/gx-engineering/SKILL.md`.
 - If a nested skill references files, resolve them relative to its own directory.
 - Do not load every nested skill by default. Pick only the one matching the user's task.
