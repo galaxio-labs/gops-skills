@@ -28,14 +28,16 @@ Three layers: `Module -> System -> Ops Project`.
 
 - `gops sys new --name <n> [--kind gxl|docker-compose]` — without `--kind` it is **interactive** (choose kind, then `ModelSTD` for `gxl`); `TEST_MODE=1` auto-selects `gxl` + the first supported model. There is currently no `--model` flag.
 - `gops sys update [--force]` — resolve vars, generates `sys/merged_vars.yml` and a `values/sys_value.yml` comment template
-- `gops sys package [--force] [--output <path>]` — update then package into `<name>-<version>.tar.gz`
+- `gops sys package [--force] [--output <path>]` — update then package into `<name>-<version>.tar.gz`; also writes `deliver.lock` (see Delivery audits).
 - `gops sys localize [--mod <module>] [--only]` — auto `update` if values missing, then merge default ⊕ `values/sys_value.yml` ⊕ `values/value.yml` → `.env` (`--only` skips update)
+- `gops sys check` — read-only drift check: recompute the merged values and diff against the existing `.env`; exit≠0 when drifted ("values changed but not re-localized").
 - `gops sys setting --init`
 - `gops sys download/install/start/stop/uninstall/status/diagnose [--mod <module>] [--env <env>]` (`--env` defaults to `default`)
 
 ### gops prj
 
 - `gops prj new --name <n>`, `gops prj import --path <pkg> [--force <0..3>]`, `gops prj update [--force <0..3>]`, `gops prj reimport [--force <0..3>]`.
+- `gops prj doctor [--strict]` — check that the project's `values/` is tracked by git (exists, a `values/<sys>/` per imported system, not `.gitignore`d, no uncommitted changes under `values/`); `--strict` escalates warnings to errors (CI gate).
 
 ## Modules (`gops mod`)
 
@@ -170,9 +172,44 @@ The current `galaxy-ops` source scaffolds all of the above for `x86-ubt22-k8s` a
 
 ### ops-gxl source & vendor-cache gotcha
 
-- Two `ops-gxl` repos exist: `galaxy-operators/ops-gxl` (`mod_ops`/`empty_operators`) and `galaxio-hub/ops-gxl` (superset incl. **`helm_ops`**). Use **`galaxio-hub`**.
-- `gx`'s vendor cache dir is keyed by `<repo-basename>.<channel>` **without the org** — both repos map to `~/.galaxy/vendor/ops-gxl.git_main`. Mixing orgs causes `read mod file fail!`.
-- Fix: point every `extern` at `galaxio-hub/ops-gxl`; if stale, delete `~/.galaxy/vendor/ops-gxl.git_main` and `~/.cache/galaxy/ops-gxl.git_main`, then rerun `gx run`.
+- Two `ops-gxl` repos exist: `galaxy-operators/ops-gxl` (old org, `mod_ops`/`empty_operators`) and `galaxio-hub/ops-gxl` (current, superset incl. **`helm_ops`** and `sys_ops`). Use **`galaxio-hub`**.
+- `gx` keys caches by `<repo-basename>.<channel>` **without the org**, so both repos map to the same names. There are **two layers**:
+  - `~/.cache/galaxy/<repo>.<channel>` — the git clone/fetch cache;
+  - `~/.galaxy/vendor/<repo>.<channel>` — the materialized **work tree that `gx` actually executes scripts/mods from** (it is a git checkout).
+- Consequences:
+  - Mixing orgs across `extern` lines causes `read mod file fail!` (same cache key, different content).
+  - A **stale vendor** keeps running old scripts even after upstream is fixed — `vendor` is what runs, `.cache` only feeds it.
+  - Clearing the cache does **not** fix a bug that is still on the remote: `gx` re-clones the same tip. Fix/push upstream **first**, then `rm -rf ~/.cache/galaxy/<repo>.<channel> ~/.galaxy/vendor/<repo>.<channel>` and rerun `gx run`.
+  - The vendor work tree is a git checkout: hand-patching files there works only until `gx` refreshes (`checkout/reset`).
+- The galaxy-ops **system** template has historically written `sys/workflows/operators.gxl` with the **old org** (`galaxy-operators/ops-gxl`) while module templates use `galaxio-hub/ops-gxl` — fix the generated file (or the template) before running the system via `gx`.
+- ops-gxl shell scripts must be **BSD/mawk-portable**: gawk-only constructs (e.g. the 3-arg `match(str,/re/,arr)`) fail on macOS `awk`. (`save_docker_images.sh` had this and broke image packaging on macOS.)
+
+## Building a system from real modules
+
+End-to-end recipe (verified composing `warp-parse` + `warp-fusion` into one `x86-ubt22-k8s` system):
+
+1. **Scaffold:** `TEST_MODE=1 gops sys new --name <sys>` (there is no `--model` yet, so it auto-picks the first supported `ModelSTD` — fix it in the file afterwards).
+2. **Pin the target model** in `sys/sys_model.yml` (`model: x86-ubt22-k8s`). Omit `kind` for GXL (only `docker-compose` is serialized).
+3. **List the modules** in `sys/mod_list.yml` — each ref has `name` / `addr` / `model` / `enable`. Use a **path address** for local modules (keeps everything offline):
+   ```yaml
+   - name: warp-parse
+     addr: { path: ../warp-parse }   # resolved relative to the cwd of `gops sys update`
+     model: x86-ubt22-k8s
+     enable: true
+   ```
+4. **Per-module localize list** `sys/setting/list.yml` (optional): `module -> {enable, localize:{src,dst}}`, where `src` = `${GXL_PRJ_ROOT}/sys/setting/<mod>` and `dst` = `${GXL_PRJ_ROOT}/sys/mods/<mod>/<model>/local/`.
+5. `sys/setting/vars.yml` holds **system-level** vars (may be empty).
+6. **`gops sys update`** then **`gops sys localize`**:
+   - copies each module's `mod/<model>/` into `sys/mods/<name>/<model>/`;
+   - `sys/merged_vars.yml` merges **only the `system`-scope** vars of the modules (module-scope vars are not hoisted);
+   - writes per-module `values/<mod>/mod_value.yml`, so two modules with the same var name (e.g. `IMAGE_TAG`) do **not** collide;
+   - localize renders each module's `local/` and writes the system `.env`.
+
+Notes:
+
+- For a `kind: gxl` system the scaffold's `docker-compose.yml` is dead weight (and its demo `${SERVICE_*}` vars are undefined once you empty `sys/setting/vars.yml`) — delete it.
+- Point `sys/workflows/operators.gxl` at `galaxio-hub/ops-gxl` (see the ops-gxl gotcha above).
+- Only `system`-scope module vars surface in `sys/merged_vars.yml`; per-module (module-scope) vars stay in `values/<mod>/`.
 
 ## System type dispatch (`kind`)
 
@@ -211,6 +248,9 @@ vender: ''
 - `sys/setting/list.yml`: per-module localize list (optional).
 - `values/sys_value.yml`: value file generated by `sys update` as a **fully commented template** (inert by default; uncomment to override).
 - `values/value.yml`: customer override (versioned — keep this; ignore generated value files).
+- `values/<mod>/mod_value.yml`: per-module value templates written by `sys update` (module-scope vars kept **per module**, so same-named vars across modules do not collide).
+- `sys/mods/<name>/<model>/`: modules materialized by `sys update` from each ref's `addr` (gitignored).
+- `deliver.lock`: deliver lock written by `sys package` (see Delivery audits).
 - `.env`: generated (gitignored), non-secret config only.
 - `docker-compose.yml`: system-level compose definition (`sys new` generates a template).
 
@@ -233,6 +273,12 @@ Both value files are **optional and may be partial**: list only the entries you 
 `sys localize` auto-runs `update` when the system variables are not resolved yet, so a single `sys localize` is enough for a fresh system; `--only` skips the update step. Explicit `sys update` remains useful to pre-resolve before packaging and to print the variable reference.
 
 Inside an ops project: when the system dir sits under a project root whose `ops-prj.yml` lists it, `sys localize` / `sys update` read and write the project values at `values/<sys_name>/` (resolved from `ops-prj.yml`), so customer values win even if `<sys>/values` is not a symlink. Run `gops prj reimport` to (re)establish the `<sys>/values` symlink.
+
+## Delivery audits (drift & lock)
+
+- **`gops sys check`** — read-only **drift** report. Re-computes the merged values (same order as `sys localize`) and diffs them against the existing `<sys>/.env`, printing `KEY: old -> new` / `+key` / `-key`. Exit≠0 when drifted ("values changed but not re-localized"); exits 0 with `[INFO] 尚无 .env 基线` when never localized. No reconcile.
+- **`deliver.lock`** — written by `gops sys package` at the system root and shipped inside the tarball. Records `lockfile_version` / `name` / `version` / `kind` / `model` / module refs (`name`/`model`/`enable`/`addr`) and `sha256:` fingerprints of `sys/merged_vars.yml` and the whole `values/` tree. Answers "which version, which values"; `generated_at` changes per package (expect churn).
+- **`gops prj doctor [--strict]`** — read-only check that a project's customer values are version-controlled (see CLI section).
 
 ## prj import / reimport
 

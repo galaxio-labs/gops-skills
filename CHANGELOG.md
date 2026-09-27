@@ -1,5 +1,15 @@
 # 变更日志
 
+## [0.2.6] - 2026-09-27
+
+### gops-engineering：对齐 galaxy-ops 1.3.2，补充系统组合与交付审计知识
+
+- CLI：新增 `gops sys check`、`gops prj doctor [--strict]`；`sys package` 说明会生成 `deliver.lock`
+- 新增「Building a system from real modules」：`sys new` → 改 `sys_model.yml`/`mod_list.yml`(路径地址)/`setting/list.yml` → `sys update` + `sys localize`，以及变量分层（只有 `system` 作用域模块变量进 `merged_vars.yml`；模块变量按 `values/<mod>/` 分目录、不串味）
+- 新增「Delivery audits (drift & lock)」：`sys check` 漂移报告、`deliver.lock` 内容与指纹、`prj doctor`
+- 重写 ops-gxl 缓存小节：区分 `.cache/galaxy`（fetch 缓存）与 `.galaxy/vendor`（实际执行的 work tree）；清缓存不能修未推送的 bug；vendor 是 git 工作区会被刷新覆盖；系统模板旧组织 `galaxy-operators/ops-gxl` 坑；ops-gxl 脚本需 BSD/mawk 可移植（gawk 专有 `match(...,arr)` 会在 macOS 崩）
+- Files 补充 `values/<mod>/mod_value.yml`、`sys/mods/`、`deliver.lock`
+
 ## [0.2.5] - 2026-09-27
 
 ### gops-engineering：新增「用真实上游仓库建 mod」工作流
