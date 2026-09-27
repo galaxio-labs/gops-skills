@@ -47,7 +47,7 @@ Use this skill for source-accurate work with `gx` (the `galaxy-flow` CLI).
 ## Relationship to gops
 
 - `galaxy-flow` (`gx`) defines and executes workflows; `galaxy-ops` (`gops`) organizes and delivers modules, systems and projects.
-- A `gxl`-type system in gops dispatches `sys start/stop/...` to `gflow`, which is the `gx`-driven executor.
+- A `gxl`-type system in gops dispatches `sys start/stop/...` to `gx` (specifically `gx run -e <env> -d <debug> [--cmd-arg <mod>] <cmd>`), and `gops` requires `gx >= 0.13.0` at `$HOME/bin/gx`.
 
 ## Pitfalls
 

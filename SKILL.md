@@ -1,6 +1,6 @@
 ---
 name: gops-skills
-description: Use when working with Galaxy project tooling — the gops CLI (galaxy-ops: organizing, configuring and delivering modules, systems and ops projects) and the gx CLI (galaxy-flow: defining and running GXL workflows). This collection routes to nested skills for gops and gx usage.
+description: "Use when working with Galaxy project tooling — the gops CLI (galaxy-ops: organizing, configuring and delivering modules, systems and ops projects) and the gx CLI (galaxy-flow: defining and running GXL workflows). This collection routes to nested skills for gops and gx usage."
 ---
 
 # Gops Skills
@@ -9,15 +9,15 @@ Top-level collection for Galaxy project skills: `gops` (galaxy-ops) and `gx` (ga
 
 ## Routing
 
-- For `gops` — `gops mod/sys/prj`, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `merged_vars.yml`, `values/value.yml` customer overrides, `prj reimport`, and value/localize flows — read `skills/gops-engineering/SKILL.md`.
+- For `gops` — `gops mod/sys/prj`, module layout / `ModelSTD`, building a mod from a real upstream repo, k8s modules with Helm (`helm_ops`), the ops-gxl op-flow contract, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `merged_vars.yml`, `values/value.yml` customer overrides, `prj reimport`, and value/localize flows — read `skills/gops-engineering/SKILL.md`.
 - For `gx` — `gx run/adm/init/mod/doc/check/self`, GXL workflow authoring, built-in `gx.*` capabilities, and `_gal/` conventions — read `skills/gx-engineering/SKILL.md`.
 - If a nested skill references files, resolve them relative to its own directory.
 - Do not load every nested skill by default. Pick only the one matching the user's task.
 
 ## Workspace Assumptions
 
-- `galaxy-ops` (gops) source: `/Users/zuowenjian/devspace/rust/galaxio/galaxy-ops`
-- `galaxy-flow` (gx) source: `/Users/zuowenjian/devspace/rust/galaxio/galaxy-flow`
+- `galaxy-ops` (gops) source: `/Users/zuowenjian/devspace/galaxy-labs/galaxy-ops`
+- `galaxy-flow` (gx) source: `/Users/zuowenjian/devspace/galaxy-labs/galaxy-flow`
 - Prefer source and tests over stale docs when they disagree.
 
 ## Validation

@@ -83,6 +83,65 @@ done
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
+# === SKILL.md frontmatter 校验 ===
+# 优先 python3+PyYAML，其次 ruby+psych；都没有时只告警不阻断。
+fm_parser="none"
+if command -v python3 >/dev/null 2>&1 && python3 -c 'import yaml' >/dev/null 2>&1; then
+  fm_parser="python3+PyYAML"
+elif command -v ruby >/dev/null 2>&1 && ruby -ryaml -e '' >/dev/null 2>&1; then
+  fm_parser="ruby+psych"
+fi
+
+extract_frontmatter() {
+  awk 'BEGIN{c=0} /^---[[:space:]]*$/{c++; if(c==1) next; if(c==2) exit} c==1{print}' "$1"
+}
+
+parse_frontmatter() {
+  case "$fm_parser" in
+    python3*) python3 -c 'import sys,yaml; yaml.safe_load(sys.stdin.read())' ;;
+    ruby*)    ruby -ryaml -e 'YAML.safe_load(STDIN.read)' ;;
+    *)        cat >/dev/null ;;
+  esac
+}
+
+check_frontmatter() {
+  local file="$1" fm err
+  fm="$(extract_frontmatter "$file")"
+  if [[ -z "$fm" ]]; then
+    echo "  ✗ $file: missing or empty YAML frontmatter" >&2
+    return 1
+  fi
+  if err="$(printf '%s\n' "$fm" | parse_frontmatter 2>&1)"; then
+    echo "  ✓ $file"
+    return 0
+  fi
+  echo "  ✗ $file: invalid YAML frontmatter" >&2
+  echo "    $err" >&2
+  return 1
+}
+
+validate_frontmatter() {
+  local files=() f rc=0
+  while IFS= read -r f; do
+    files+=("$f")
+  done < <(find "$src_dir" -type f -name 'SKILL.md' | sort)
+
+  if [[ ${#files[@]} -eq 0 ]]; then
+    echo "Warning: no SKILL.md found under $src_dir; skipping frontmatter check" >&2
+    return 0
+  fi
+
+  echo "Validating SKILL.md frontmatter ($fm_parser)..."
+  for f in "${files[@]}"; do
+    check_frontmatter "$f" || rc=1
+  done
+  if [[ $rc -ne 0 ]]; then
+    echo "Frontmatter validation failed; aborting install." >&2
+    return 1
+  fi
+  echo ""
+}
+
 src_dir=""
 tmp_dir=""
 
@@ -154,6 +213,12 @@ if ! resolve_local_src; then
   resolve_remote_src
 fi
 
+if [[ "$fm_parser" == "none" ]]; then
+  echo "Warning: neither python3+PyYAML nor ruby+psych found; skipping SKILL.md frontmatter validation." >&2
+elif ! validate_frontmatter; then
+  exit 1
+fi
+
 # 安装单个 skill 时，目标名 = skill_name；安装整个 collection 时 = gops-skills。
 dest_name="${skill_name:-gops-skills}"
 
@@ -167,6 +232,8 @@ for target_base in "${target_dirs[@]}"; do
     ln -s "$src_dir" "$dst_dir"
   else
     cp -R "$src_dir" "$dst_dir"
+    # 不要把 VCS 元数据（.git）装进 skills 目录
+    rm -rf "$dst_dir/.git"
   fi
 
   platform="custom"

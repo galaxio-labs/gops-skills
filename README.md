@@ -10,7 +10,7 @@ The repo is organized as a top-level router skill plus nested tool-specific skil
 ## Available Skills
 
 - `gops-skills` — top-level router for Galaxy gops/gx tasks.
-- `gops-engineering` — recommended `gops` usage: `mod`/`sys`/`prj`, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `merged_vars.yml`, `values/value.yml`, `prj reimport`.
+- `gops-engineering` — recommended `gops` usage: `mod`/`sys`/`prj`, module layout & `ModelSTD`, k8s modules with Helm (`helm_ops`), the ops-gxl op-flow contract, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `merged_vars.yml`, `values/value.yml`, `prj reimport`.
 - `gx-engineering` — recommended `gx` usage: `run`/`adm`/`init`/`mod`/`doc`/`check`/`self`, GXL authoring, built-in `gx.*` capabilities.
 
 ## Installation
@@ -37,6 +37,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/galaxio-labs/gops-skills/mai
 ```
 
 See `install.sh --help` for all options.
+
+Before installing, `install.sh` validates the YAML frontmatter of every `SKILL.md` (prefers `python3` + PyYAML, falls back to `ruby` + psych). Invalid frontmatter aborts the install; if neither parser is available it warns and continues.
 
 Environment variables:
 
