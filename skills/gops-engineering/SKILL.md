@@ -277,7 +277,7 @@ End-to-end recipe (verified composing `warp-parse` + `warp-fusion` into one `x86
 
 Notes:
 
-- For a `kind: gxl` system the scaffold's `docker-compose.yml` is dead weight (and its demo `${SERVICE_*}` vars are undefined once you empty `sys/setting/vars.yml`) — delete it.
+- For a `kind: gxl` system the scaffold's `sys/docker-compose.yaml` is dead weight (and its demo `${SERVICE_*}` vars are undefined once you empty `sys/setting/vars.yml`) — delete it.
 - Point `sys/workflows/operators.gxl` at `galaxio-hub/ops-gxl` (see the ops-gxl gotcha above).
 - Only `system`-scope module vars surface in `sys/merged_vars.yml`; per-module (module-scope) vars stay in `values/<mod>/`.
 
@@ -298,6 +298,10 @@ Notes:
 - `gxl` dispatches to `$HOME/bin/gx` as `gx run -e <env> -d <debug> [--cmd-arg <mod>] <cmd>` (requires `gx >= 0.13.0`).
 - `docker-compose` dispatches to `docker compose` (no `gx` needed); `--mod` is ignored.
 - Missing `kind` defaults to `gxl` (backward compatible). For `gxl`, `sys_model.yml` also carries `model`; for `docker-compose` the `kind` line is written and `model` is omitted.
+- The compose file is resolved in priority order: `sys/compose.yaml` → `sys/compose.yml` → `sys/docker-compose.yaml` → `sys/docker-compose.yml` → `<root>/compose.yaml` → `<root>/compose.yml` → `<root>/docker-compose.yaml` → `<root>/docker-compose.yml`.
+- When the file is under `sys/`, `gops sys` runs `docker compose -f <file> --project-directory <root> <cmd>`: the **project directory is the system root** (project name = root basename; relative mounts and `.env` resolve against the root, not `sys/`). An explicit `-f` disables docker's override auto-merge, so `gops sys` explicitly merges `<sys>/<stem>.override.{yaml,yml}` if present.
+- Legacy root layout still works: when the file sits at the system root, `gops sys` passes no `-f`/global args, so `docker-compose.override.yml` auto-merge and the `COMPOSE_FILE` env var behave exactly as before.
+- `.env`, `values/` and `sys-prj.yml` stay at the system root regardless of where the compose file lives.
 
 To make an existing docker-compose stack manageable by `gops sys`, mark `kind` in `sys/sys_model.yml`:
 
@@ -322,11 +326,11 @@ vender: ''
 - `sys/mods/<name>/<model>/`: modules materialized by `sys update` from each ref's `addr` (gitignored).
 - `deliver.lock`: deliver lock written by `sys package` (see Delivery audits).
 - `.env`: generated (gitignored), non-secret config only.
-- `docker-compose.yml`: system-level compose definition (`sys new` generates a template).
+- `sys/docker-compose.yaml`: system-level compose definition (`sys new` generates a template). `gops sys` resolves it through a fallback chain (incl. the legacy system-root layout) — see System type dispatch.
 
 ## Secrets (docker-compose)
 
-Secrets are NOT written to `.env`. Use `${SEC_xxx}` placeholders in `docker-compose.yml`:
+Secrets are NOT written to `.env`. Use `${SEC_xxx}` placeholders in the compose file (`sys/docker-compose.yaml` by default):
 
 - `sys start` loads secrets from `~/.galaxy/sec_value.yml` (or `./.galaxy/sec_value.yml`) via `orion_sec::load_sec_dict()`, injecting `SEC_*` env vars into the `docker compose` subprocess (not persisted to disk).
 - Keys normalize to uppercase with a `SEC_` prefix (`db_password` → `SEC_DB_PASSWORD`).
