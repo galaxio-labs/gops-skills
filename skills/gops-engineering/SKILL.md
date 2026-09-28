@@ -67,14 +67,31 @@ End-to-end recipe (verified against `wp-labs/warp-parse` and `wp-labs/warp-fusio
 
 1. **Resolve the upstream coordinates first — do not guess:**
    - latest git tag: `git ls-remote --tags --refs <repo-url> | sed 's#.*/##' | sort -V | tail`
-   - container image + tags: open the registry packages page, e.g. `https://github.com/<owner>/<repo>/pkgs/container/<repo>` (GHCR lists `latest` and version tags).
-   - The git tag and image tag normally share the version (tag `v0.7.0-alpha` ⇔ image `0.7.0-alpha`).
+   - release artifacts: `GET https://api.github.com/repos/<owner>/<repo>/releases/tags/<tag>` → `assets[].name` (or the project's `dist/install-manifest.json`); download url is `https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>`.
+   - container image + tags: the registry packages page, e.g. `https://github.com/<owner>/<repo>/pkgs/container/<repo>`.
+   - **Tag gotcha:** the release notes may print `docker pull ...:<tag>` with a `v` the registry tag does not have (`v0.27.1-alpha` vs the real `0.27.1-alpha`). Verify before writing the k8s artifact: `docker manifest inspect ghcr.io/<owner>/<repo>:<tag>`.
 2. **Scaffold:** `gops mod new --name <mod>`.
 3. **Fill `mod/<model>/spec/artifact.yml`:**
-   - host models → git artifact:
+   - host models → **prebuilt release artifact** (http archive) — **preferred**:
      ```yaml
      - name: <mod>
        version: <version>                 # e.g. 0.27.1-alpha
+       origin_addr:
+         url: <release-asset-url>         # https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>
+       cache_enable: false
+       local: <asset>.tar.gz              # cached under local/cache/
+     ```
+     Asset names are `<proj>-<tag>-<target>.tar.gz`. Platform→target: `arm-mac14-host` → `aarch64-apple-darwin`,
+     `x86-ubt22-host` → `x86_64-unknown-linux-gnu` (`aarch64-unknown-linux-gnu` ships too, but no ModelSTD maps to it).
+     These tarballs expand to an `artifacts/` root, so `install` is just extract + copy:
+     ```gxl
+     gx.cmd ( "tar -xzf ${cache_dir}/${ITEM.LOCAL} -C ${pkg_dir}" );
+     gx.cmd ( "install -m 0755 ${pkg_dir}/artifacts/* ${bin_dir}/" );
+     ```
+   - host models → git source (alternative; `install` must **build** it — needs a toolchain, avoid when a release exists):
+     ```yaml
+     - name: <mod>
+       version: <version>
        origin_addr:
          repo: <repo-url>
          tag: v<version>
@@ -97,8 +114,10 @@ End-to-end recipe (verified against `wp-labs/warp-parse` and `wp-labs/warp-fusio
 5. **Render & inspect:** `gops mod update` then `gops mod localize`
    - host: `mod/<model>/local/artifact.yml`
    - k8s: `mod/x86-ubt22-k8s/local/confs/values.yaml` → `image: "<registry>/<owner>/<repo>:<version>"`; `templates/` copied verbatim.
-6. **Real end-to-end check (host):** `gx run -e <env> download` clones the tag into `mod/<model>/local/cache/<mod>`
-   (verify with `git -C mod/<model>/local/cache/<mod> describe --tags`). k8s `download`/`install` need docker/helm/kubectl.
+6. **Real end-to-end check (host):** `gx run -e <env> download` then `gx run -e <env> install`; then
+   `mod/<model>/local/bin/<bin> --version` should match the pinned version
+   (release form: tarball in `local/cache/`; git form: clone in `local/cache/<mod>`, check `git -C ... describe --tags`).
+   k8s `download`/`install` need docker/helm/kubectl.
 
 Notes / gotchas:
 
@@ -106,6 +125,44 @@ Notes / gotchas:
 - Changing a var's scope does **not** rewrite existing `values/<model>/` files: `init_setting_value` writes them only when `sys_value.yml` is absent. To regenerate after a scope change, delete `values/<model>/` and re-run `gops mod update` + `gops mod localize`; the resulting `.used_value.yml` shows each var's true `origin` (e.g. `mod-setting`).
 - The module `.gitignore` ignores `**/local`, `.*`, `artifacts` — the clone cache under `local/cache/` stays out of git.
 - `gops mod localize` requires a prior `gops mod update` (see Layout above).
+
+### `gops mod localize` semantics (and why order matters)
+
+`gops mod localize` **cleans `local/` first** (`make_clean_path`), then renders `spec/` → `local/`.
+So the runtime order is **localize → download → install → start**; re-running `localize` wipes
+`local/cache` (downloads), `local/bin` (installed binaries) and `local/run`.
+
+`mod/<model>/setting.yml` controls rendering:
+
+- `localize.templatize_path.excludes` → matching paths are **copied verbatim, not rendered** (this is how
+  k8s models keep Helm `{{ }}` intact in `spec/confs/templates`). It is **not** "omit from output".
+- `localize.templatize_path.includes` → whitelist; files that don't match are skipped (`is_include` false). Empty ⇒ all included.
+- No config omits a path from the output entirely — directories are always created; only files are filtered.
+- Matching is `PathBuf::starts_with` **or** glob; paths are relative to the model dir (e.g. `spec/confs/templates`, `spec/conf/.run`).
+- `templatize_cust` default is unset ⇒ only Handlebars `{{ }}` is processed (TOML `[[table]]` like `[[stat.pick]]` stays intact);
+  set `label_beg`/`label_end` to `[[`/`]]` to render `[[VAR]]` (what k8s models do).
+
+Exclude binary/runtime dirs, or localize aborts on them:
+
+```yaml
+localize:
+  templatize_path:
+    excludes:
+    - spec/conf/.run          # binary sqlite/lock → otherwise "stream did not contain valid UTF-8"
+```
+
+### Host runtime ops (`start` / `stop`)
+
+The scaffold leaves `install` / `start` / `stop` as no-ops (`empty_operators` subclass); fill them per module.
+
+- `start` (daemon): guard the binary + work-root, idempotent "already running" check, then background:
+  `nohup <bin> daemon --work-root <abs> > <log> 2>&1 < /dev/null & echo $! > <pid>`.
+  Some apps **require an absolute work-root** — compute `root=$(cd <dir> && pwd)`.
+- `stop`: `cat` the pid file → `kill` → **wait for exit** → remove the pid file. The wait matters:
+  without it, `gx run stop && gx run start` races on the app's per-work-root lock
+  (`<work-root>/.run/.lock`) and the new instance exits non-zero (`another wparse instance is already using work-root`).
+- Silence the command echo in `gx.shell`/`gx.cmd` with `silence: "true"` (see `skills/gx-engineering/SKILL.md`),
+  otherwise the whole shell one-liner is printed and the real one-line status is buried.
 
 ### `ModelSTD` = `CpuArch × OsCPE × RunSPC`
 

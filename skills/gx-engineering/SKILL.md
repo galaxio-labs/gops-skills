@@ -44,6 +44,25 @@ Use this skill for source-accurate work with `gx` (the `galaxy-flow` CLI).
 - `gx.patch_file`
 - expression function: `defined(${VAR})`
 
+## Authoring GXL (`gx.shell` / `gx.cmd`)
+
+- Both execute the string via `/bin/sh`, and **echo the whole command** before running it. Hide the echo with
+  `silence: "true"` (keeps stdout); `quiet: "true"` does **not** hide it. `stream: "true"` forwards
+  stdout/stderr live (use it for long-running commands).
+- **No `+` string concatenation** — `"a" + "b"` (even split across lines) is a parse error (`need '}'`). Use one literal.
+- **Interpolation:** only `${NAME}` / `${NAME:default}` are GXL-substituted; bare shell constructs
+  (`$!`, `$$`, `$(...)`, `$((...))`, `$var`) pass through untouched, so both can mix in one string:
+  `gx.shell ( "pid=$(cat ${pid_file}); kill $pid", silence: "true" );`.
+- **Backgrounding a daemon:** `nohup <cmd> > <log> 2>&1 < /dev/null & echo $! > <pid>`. Beware `a && b &`:
+  `&` binds the whole list, so `mkdir x && cmd &` backgrounds `mkdir` too — split with `mkdir x; …` first.
+- `gx.read_file(file:, name:)` loads yaml/json/ini into a variable; `gx.download(url:, local_file:)` fetches a file.
+- Envs: `mod envs { env <name> { VAR = "..."; } }`, selected with `gx run -e <name>`. From a **module root**
+  the names are those in the root `_gal/work.gxl` (e.g. `arm_mac`, `x86_ubt`, `x86_ubt_k8s`); from a **model dir**
+  the model's own `_gal/work.gxl` defines only `local`/`spec`/`default`, so a module-root env name there fails
+  with `Environment '<name>' not found`.
+- `mod_ops` dispatches an op with `gx.run( local: "./mod/${ENV_MODEL}", env: "${ENV_MODULE_ENV}", flow: "<op>" )`;
+  module flows subclass `empty_operators` and tag overrides with `#[task(name="gops@<op>")]`.
+
 ## Relationship to gops
 
 - `galaxy-flow` (`gx`) defines and executes workflows; `galaxy-ops` (`gops`) organizes and delivers modules, systems and projects.

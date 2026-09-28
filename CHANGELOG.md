@@ -1,5 +1,23 @@
 # 变更日志
 
+## [0.2.7] - 2026-09-28
+
+### gops-engineering：host 模型改用 release 制品；补齐 `mod localize` 语义与运行时 ops
+
+- host 模型 `artifact.yml` 优先用**预编译 release 制品**（http 归档）而非 git 源码：给出 asset 发现方式（releases API / `dist/install-manifest.json`）、`<proj>-<tag>-<target>.tar.gz` 命名、平台→target 映射（`arm-mac14-host`→`aarch64-apple-darwin`、`x86-ubt22-host`→`x86_64-unknown-linux-gnu`），`install` 只需解包 `artifacts/*`；git 形态保留为备选（需自行 build，需工具链）
+- tag 坑：release notes 里的 `docker pull ...:v<ver>` 可能多带 `v`，实际镜像 tag 无 `v`，用 `docker manifest inspect` 核实
+- 新增「`gops mod localize` semantics」：`setting.yml` 的 `excludes` 是**原样 copy（非渲染）**、`includes` 是白名单、无法整目录省略；`templatize_cust` 默认仅处理 `{{ }}`（TOML `[[table]]` 安全）；排除 `.run/` 等二进制/运行时目录，否则报 `stream did not contain valid UTF-8`
+- **重要**：`gops mod localize` 会先 `make_clean_path(local/)` 清空 `local/`，故运行顺序为 **localize → download → install → start**；重跑 localize 会清掉 `local/bin`、`local/cache`
+- 新增「Host runtime ops (`start`/`stop`)」：后台 `nohup … & echo $! > <pid>`、work-root 需**绝对路径**、`stop` 必须**等进程退出**（否则 `stop && start` 撞 `<work-root>/.run/.lock`）
+
+### gx-engineering：新增「Authoring GXL (`gx.shell`/`gx.cmd`)」
+
+- `silence: "true"` 隐去命令回显（`quiet: "true"` 无效）；不支持 `+` 字符串拼接；仅 `${NAME}` 插值，裸 `$!`/`$$`/`$(...)`/`$var` 透传给 `/bin/sh`；`a && b &` 会整串后台化；env 名在 module root 与 model dir 下不同；`#[task(name="gops@<op>")]`
+
+### 其它
+
+- Workspace Assumptions 改为 GitHub 地址（`galaxio-labs/galaxy-ops`、`galaxio-labs/galaxy-flow`），不再写本机绝对路径
+
 ## [0.2.6] - 2026-09-27
 
 ### gops-engineering：对齐 galaxy-ops 1.3.2，补充系统组合与交付审计知识

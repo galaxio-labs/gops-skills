@@ -10,8 +10,8 @@ The repo is organized as a top-level router skill plus nested tool-specific skil
 ## Available Skills
 
 - `gops-skills` — top-level router for Galaxy gops/gx tasks.
-- `gops-engineering` — recommended `gops` usage: `mod`/`sys`/`prj`, module layout & `ModelSTD`, k8s modules with Helm (`helm_ops`), the ops-gxl op-flow contract, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `merged_vars.yml`, `values/value.yml`, `prj reimport`.
-- `gx-engineering` — recommended `gx` usage: `run`/`adm`/`init`/`mod`/`doc`/`check`/`self`, GXL authoring, built-in `gx.*` capabilities.
+- `gops-engineering` — recommended `gops` usage: `mod`/`sys`/`prj`, module layout & `ModelSTD`, building a mod from a real upstream repo (host release artifacts), `gops mod localize` semantics & module runtime ops (`start`/`stop`), k8s modules with Helm (`helm_ops`), the ops-gxl op-flow contract, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `merged_vars.yml`, `values/value.yml`, `prj reimport`.
+- `gx-engineering` — recommended `gx` usage: `run`/`adm`/`init`/`mod`/`doc`/`check`/`self`, GXL authoring & pitfalls, built-in `gx.*` capabilities.
 
 ## Installation
 
