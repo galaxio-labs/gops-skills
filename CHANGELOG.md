@@ -1,5 +1,13 @@
 # 变更日志
 
+## [0.2.8] - 2026-09-28
+
+### gops-engineering：host 内嵌工程直接摊在 `spec/` 下，不再套子目录
+
+- 新增节「Embedded app project: make `spec/` the work-root (no extra subdir)」：host 模块若内嵌一个应用工程（如 warp-parse 的 work-root：`conf/`、`connectors/`、`models/`、`topology/`），应**直接摊在 `spec/` 下**，不要再套一层子目录（否则出现 `spec/conf/conf/…` 这类多余且易混层级）
+- localize 后 `spec/` → `local/`，故 `work_root = "${local_dir}"`，`setting.yml` 排除运行时的 `spec/.run`
+- 应用自身必需的 `conf/` 层仍保留（app 约定，非 gops 引入）；work-root 与模块的 `cache/bin/pkg/run` 同级，app 会忽略多余目录
+
 ## [0.2.7] - 2026-09-28
 
 ### gops-engineering：host 模型改用 release 制品；补齐 `mod localize` 语义与运行时 ops

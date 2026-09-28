@@ -164,6 +164,19 @@ The scaffold leaves `install` / `start` / `stop` as no-ops (`empty_operators` su
 - Silence the command echo in `gx.shell`/`gx.cmd` with `silence: "true"` (see `skills/gx-engineering/SKILL.md`),
   otherwise the whole shell one-liner is printed and the real one-line status is buried.
 
+### Embedded app project: make `spec/` the work-root (no extra subdir)
+
+When a host module ships an app project (e.g. warp-parse's work-root: `conf/`, `connectors/`, `models/`, `topology/`):
+
+- **Put the project directly under `spec/`** — do **not** wrap it in a subdirectory. A wrapper (e.g. `spec/conf/`)
+  just yields a confusing `spec/conf/conf/…` plus an extra indirection. `localize` turns `spec/` into `local/`, so:
+  - `work_root = "${local_dir}"` — the app then reads `local/conf/wparse.toml`, `local/connectors/`, …
+  - `setting.yml` excludes the runtime dir at its real path: `spec/.run`.
+- The app's **own** config dir (`conf/` for warp-parse) must still exist inside the work-root — that layer is an
+  app convention, not something gops added; only the gops-side wrapper is dropped.
+- Side effect: the work-root (`local/`) then also holds the module's `cache/`, `bin/`, `pkg/`, `run/` — the app
+  ignores the extra directories, so this is fine.
+
 ### `ModelSTD` = `CpuArch × OsCPE × RunSPC`
 
 Supported: `arm-mac14-host`, `x86-ubt22-host`, `x86-ubt22-k8s` (`RunSPC` = `host` | `k8s`).
