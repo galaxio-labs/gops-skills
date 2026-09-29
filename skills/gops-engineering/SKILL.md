@@ -32,7 +32,12 @@ Three layers: `Module -> System -> Ops Project`.
 - `gops sys localize [--mod <module>] [--only]` — by default **always re-resolves first** (the var-resolve stage, i.e. `update` without the localize), so editing `sys/setting/vars.yml` then running `localize` takes effect in one command. Then merges default ⊕ `values/sys_value.yml` ⊕ `values/value.yml` → `.env` (`--only` always skips the resolve step and uses the existing `sys/merged_vars.yml`).
 - `gops sys check` — read-only drift check: recompute the merged values and diff against the existing `.env`; exit≠0 when drifted ("values changed but not re-localized"). Also prints `[WARN]` when a var definition is newer than `sys/merged_vars.yml` (definition-level staleness not visible in `.env`); the warning does not change the exit code.
 - `gops sys setting --init`
-- `gops sys download/install/start/stop/uninstall/status/diagnose [--mod <module>] [--env <env>]` (`--env` defaults to `default`)
+
+### gops run
+
+Runtime operations on the target system (operator-flow contract); dispatch by `sys/sys_model.yml` `kind` — `gxl` → `gx run <cmd>`, `docker-compose` → a `docker compose` subcommand.
+
+- `gops run download|install|uninstall|start|stop|status|diagnose [--mod <module>] [--env <env>]` (`--env` defaults to `default`). Compose mapping: `download`→`pull`, `install`→`create`, `uninstall`→`down`, `start`→`up -d`, `stop`→`stop`, `status`→`ps`, `diagnose`→`config` (secrets injected as `********` masks).
 
 ### gops prj
 
