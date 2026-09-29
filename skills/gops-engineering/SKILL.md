@@ -28,7 +28,7 @@ Three layers: `Module -> System -> Ops Project`.
 
 - `gops sys new --name <n> [--kind gxl|docker-compose]` — without `--kind` it is **interactive** (choose kind, then `ModelSTD` for `gxl`); `TEST_MODE=1` auto-selects `gxl` + the first supported model. There is currently no `--model` flag.
 - `gops sys update [--force]` — resolve vars, generates `sys/merged_vars.yml` and a `values/sys_value.yml` comment template
-- `gops sys package [--force] [--output <path>]` — update then package into `<name>-<version>.tar.gz`; also writes `deliver.lock` (see Delivery audits).
+- `gops sys package [--force] [--output <path>] [--no-git]` — update then package into `<name>-<version>.tar.gz`; **default packs only git-tracked files** (≈ `git archive`), `--no-git` packs the whole dir; writes `deliver.lock` (see Delivery audits).
 - `gops sys localize [--mod <module>] [--only]` — auto `update` if values missing, then merge default ⊕ `values/sys_value.yml` ⊕ `values/value.yml` → `.env` (`--only` skips update)
 - `gops sys check` — read-only drift check: recompute the merged values and diff against the existing `.env`; exit≠0 when drifted ("values changed but not re-localized").
 - `gops sys setting --init`
@@ -38,6 +38,14 @@ Three layers: `Module -> System -> Ops Project`.
 
 - `gops prj new --name <n>`, `gops prj import --path <pkg> [--force <0..3>]`, `gops prj update [--force <0..3>]`, `gops prj reimport [--force <0..3>]`.
 - `gops prj doctor [--strict]` — check that the project's `values/` is tracked by git (exists, a `values/<sys>/` per imported system, not `.gitignore`d, no uncommitted changes under `values/`); `--strict` escalates warnings to errors (CI gate).
+
+### gops self
+
+- `gops self status` — current version, install dir, and the last self-update state.
+- `gops self check [--channel stable|alpha|beta] [--json]` — query the channel manifest for a newer release; `--json` prints a machine-readable blob on a banner-free stdout.
+- `gops self update [--channel …] [--to <ver>] [--yes] [--dry-run] [--force]` — download, verify (sha256), install, and back up the current binary; auto-rolls back if the new `--version` health check fails.
+- `gops self rollback [--id <14-digit>]` — restore the most recent (or given) backup.
+- Source of truth is the same `galaxio-labs/get` manifest as `inst-x.sh gops <channel>`; state/lock/backups live in `~/.galaxy/self_update/gops` (namespaced apart from `gx`).
 
 ## Modules (`gops mod`)
 
@@ -115,8 +123,7 @@ End-to-end recipe (verified against `wp-labs/warp-parse` and `wp-labs/warp-fusio
    - host: `mod/<model>/local/artifact.yml`
    - k8s: `mod/x86-ubt22-k8s/local/confs/values.yaml` → `image: "<registry>/<owner>/<repo>:<version>"`; `templates/` copied verbatim.
 6. **Real end-to-end check (host):** `gx run -e <env> download` then `gx run -e <env> install`; then
-   `mod/<model>/local/bin/<bin> --version` should match the pinned version
-   (release form: tarball in `local/cache/`; git form: clone in `local/cache/<mod>`, check `git -C ... describe --tags`).
+   `mod/<model>/local/bin/<bin> --version` should match the pinned version. Under a system, `download` clones the tag into the **host-level shared** cache `sys/<model>/local/cache/<mod>` (verify with `git -C sys/<model>/local/cache/<mod> describe --tags`); standalone falls back to the module-local `local/cache/<mod>`.
    k8s `download`/`install` need docker/helm/kubectl.
 
 Notes / gotchas:
@@ -190,7 +197,7 @@ Module flows follow the `empty_operators` contract: `download / install / start 
 
 Host-model scaffold (`empty_operators` subclass) that `gops mod new` writes:
 
-- `download` reads `local/artifact.yml` and fetches each artifact **either** a git repo (`origin_addr.repo` + optional `origin_addr.tag` → `git clone --depth 1 [--branch <tag>]`) **or** an HTTP(S) archive (`origin_addr.url` → `gx.download`). It `rm -rf`s the target cache dir first, so re-download is idempotent. Cache lands in `local/cache/`.
+- `download` reads `local/artifact.yml` and fetches each artifact **either** a git repo (`origin_addr.repo` + optional `origin_addr.tag` → `git clone --depth 1 [--branch <tag>]`) **or** an HTTP(S) archive (`origin_addr.url` → `gx.download`). It `rm -rf`s the target cache dir first, so re-download is idempotent. When run under a system (i.e. `ENV_SYS_MODEL` is defined) the cache is **host-level and shared per model**: `sys/<model>/local/cache/`; standalone falls back to the module-local `local/cache/`.
 - `install` is intentionally empty — fill it per module (build/install the binary).
 - Both the host and k8s externs point at `galaxio-hub/ops-gxl` and share the `${GXL_CHANNEL:main}` channel var.
 
@@ -267,10 +274,10 @@ End-to-end recipe (verified composing `warp-parse` + `warp-fusion` into one `x86
      model: x86-ubt22-k8s
      enable: true
    ```
-4. **Per-module localize list** `sys/setting/list.yml` (optional): `module -> {enable, localize:{src,dst}}`, where `src` = `${GXL_PRJ_ROOT}/sys/setting/<mod>` and `dst` = `${GXL_PRJ_ROOT}/sys/mods/<mod>/<model>/local/`.
+4. **Per-module localize list** `sys/setting/list.yml` (optional): `module -> {enable, localize:{src,dst}}`, where `src` = `${GXL_PRJ_ROOT}/sys/setting/<mod>` and `dst` = `${GXL_PRJ_ROOT}/sys/<model>/mods/<mod>/local/`.
 5. `sys/setting/vars.yml` holds **system-level** vars (may be empty).
 6. **`gops sys update`** then **`gops sys localize`**:
-   - copies each module's `mod/<model>/` into `sys/mods/<name>/<model>/`;
+   - copies each module's `mod/<model>/` into `sys/<model>/mods/<name>/` (modules are grouped by target model);
    - `sys/merged_vars.yml` merges **only the `system`-scope** vars of the modules (module-scope vars are not hoisted);
    - writes per-module `values/<mod>/mod_value.yml`, so two modules with the same var name (e.g. `IMAGE_TAG`) do **not** collide;
    - localize renders each module's `local/` and writes the system `.env`.
@@ -323,7 +330,7 @@ vender: ''
 - `values/sys_value.yml`: value file generated by `sys update` as a **fully commented template** (inert by default; uncomment to override).
 - `values/value.yml`: customer override (versioned — keep this; ignore generated value files).
 - `values/<mod>/mod_value.yml`: per-module value templates written by `sys update` (module-scope vars kept **per module**, so same-named vars across modules do not collide).
-- `sys/mods/<name>/<model>/`: modules materialized by `sys update` from each ref's `addr` (gitignored).
+- `sys/<model>/mods/<name>/`: modules materialized by `sys update` from each ref's `addr`, grouped by target model (gitignored).
 - `deliver.lock`: deliver lock written by `sys package` (see Delivery audits).
 - `.env`: generated (gitignored), non-secret config only.
 - `sys/docker-compose.yaml`: system-level compose definition (`sys new` generates a template). `gops sys` resolves it through a fallback chain (incl. the legacy system-root layout) — see System type dispatch.
@@ -363,6 +370,6 @@ Inside an ops project: when the system dir sits under a project root whose `ops-
 ## Pitfalls
 
 - Generated files under `values/` are overwritten by `sys update`; keep customer overrides in `values/value.yml` or list them in `values/sys_value.yml` (partial is fine — the rest come from `sys/merged_vars.yml`).
-- `prj import` requires `sys/merged_vars.yml` to be committed (generated by `sys update`); `sys package` runs `update` first, so packaged systems always contain it.
+- `prj import` requires `sys/merged_vars.yml` (generated by `sys update`) to be in the package. `sys package` runs `update` first, but by default packs **only git-tracked files** — so `sys/merged_vars.yml` (and anything else the customer needs) must be **committed**; use `--no-git` to pack the working tree as-is.
 - A stale PATH `gops` may be an old version; build and use `target/debug/gops` (1.3.0+) for docker-compose type dispatch.
 - `gxl` dispatch shells out to `$HOME/bin/gx` and checks `gx >= 0.13.0`; if the version check fails the deploy commands abort before running.
