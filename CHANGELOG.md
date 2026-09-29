@@ -9,6 +9,7 @@
 - **值文件键大小写不敏感**（加载时归一化为大写）——此前小写键（`cpu: 2000`）会被静默忽略
 - `sys diff --json` 为 `{ "system": [...], "modules": [{ "module": …, "changes": [...] }] }`（破坏性：由数组改为对象）
 - localize **文件变更表标头**改为 `<输出目录> ← <源模板>`（模块 `spec/` 与 `sys/setting/<mod>` 会写入同一个 `local/`，需区分来源）
+- **`sys diff` 新增文件覆盖层**：列出 `sys/setting/<mod>/**` 相对模块 `spec/**` 的 created/replaced（纯路径+内容比对，不需渲染）；`--json` 增 `files` 字段
 - `localize`（`sys` / `mod`）新增**文件变更表**：渲染落地后报 `FILE | STATE`（`created` / `replaced`），用前后内容指纹（sha256）比对（清空再重建不误报未变文件，删除不报）
 - 澄清与 `sys check` 的分工：`check` 看「`.env` 与当前合并值的漂移」，`diff` 看「哪些值被覆盖、被哪一层覆盖（origin）」；新增/替换文件需基线，故只在 `localize` 呈现
 
