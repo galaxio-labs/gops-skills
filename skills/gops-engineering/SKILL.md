@@ -22,7 +22,8 @@ Three layers: `Module -> System -> Ops Project`.
 - `gops mod new --name <n>` — generates one `mod/<model>/` per supported `ModelSTD`: `arm-mac14-host`, `x86-ubt22-host`, `x86-ubt22-k8s`. Each model dir gets `vars.yml`, `spec/artifact.yml`, `spec/depends.yml`, `workflows/operators.gxl`, `_gal/work.gxl`.
 - `gops mod example` — example module (postgresql).
 - `gops mod update [--force <0..3>]` — resolve deps/refs; also writes `values/<model>/` templates (`sys_value.yml`, `mod_value.yml`).
-- `gops mod localize` — reads `values/<model>/` and writes `mod/<model>/local/`. The declared `--value` / `--default` flags are currently NOT consumed; values always come from `values/<model>/`.
+- `gops mod localize` — reads `values/<model>/` and writes `mod/<model>/local/`. The declared `--value` / `--default` flags are currently NOT consumed; values always come from `values/<model>/`. Prints a value-change table at the end.
+- `gops mod diff [--json]` — read-only value-change table **per model**: initial `mod/<model>/vars.yml` defaults (`mod-default`) vs effective values. Columns `KEY`/`INITIAL`/`EFFECTIVE`/`ORIGIN`/`MUTABILITY`/`STATE` (`same|changed|added|removed`; only non-`same` rows are shown).
 
 ### gops sys
 
@@ -31,6 +32,7 @@ Three layers: `Module -> System -> Ops Project`.
 - `gops sys package [--force] [--output <path>] [--full]` — update then package into `<name>-<version>.tar.gz`; **default packs only git-tracked files** (no artifacts), `--full` packs the whole dir (incl. artifacts/localized output, for air-gapped delivery); writes `deliver.lock` (see Delivery audits). **Both modes exclude paths listed in `sys-prj.yml`'s `ignore:`** (glob, anchored at the system root — bare `mods` matches only root-level, use `**/mods` for any depth; `*` does not cross `/`; a directory pattern like `sys/*/mods` excludes the whole subtree; leading `/` or `./` is normalized). `deliver.lock` is never ignored. Overly broad patterns (`*`) will also drop `sys/merged_vars.yml`.
 - `gops sys localize [--mod <module>] [--only]` — by default **always re-resolves first** (the var-resolve stage, i.e. `update` without the localize), so editing `sys/setting/vars.yml` then running `localize` takes effect in one command. Then merges default ⊕ `values/sys_value.yml` ⊕ `values/value.yml` → `.env` (`--only` always skips the resolve step and uses the existing `sys/merged_vars.yml`).
 - `gops sys check` — read-only drift check: recompute the merged values and diff against the existing `.env`; exit≠0 when drifted ("values changed but not re-localized"). Also prints `[WARN]` when a var definition is newer than `sys/merged_vars.yml` (definition-level staleness not visible in `.env`); the warning does not change the exit code.
+- `gops sys diff [--json]` — read-only **value-change table**: initial `sys/merged_vars.yml` defaults (`sys-defaults`) vs effective values (⊕ `values/sys_value.yml` `sys-setting` ⊕ `values/value.yml` `customer`). Columns `KEY`/`INITIAL`/`EFFECTIVE`/`ORIGIN`/`MUTABILITY`/`STATE`; only non-`same` rows shown. Compares **un-expanded** values (before `${VAR}` eval) to avoid false changes. `gops sys localize` prints the same table at the end. `gops prj diff` is not provided.
 - `gops sys setting --init`
 
 ### gops run
@@ -356,6 +358,8 @@ Secrets are NOT written to `.env`. Use `${SEC_xxx}` placeholders in the compose 
 
 Both value files are **optional and may be partial**: list only the entries you want to override; the rest fall back to the system defaults. In an ops project, put your deltas in `values/<sys_name>/sys_value.yml`.
 
+To see **which** values are overridden and by which layer, use `gops sys diff` (per system) or `gops mod diff` (per module model) — same table `localize` prints at the end.
+
 `sys localize` 默认先解析变量（等价于先跑一次 `sys update`），所以新系统一条 `sys localize` 就够；`--only` 跳过解析（用现有 `sys/merged_vars.yml`，缺失则报错）。显式 `sys update` 仍适用于打包前预解析、打印变量参考等场景。
 
 Inside an ops project: when the system dir sits under a project root whose `ops-prj.yml` lists it, `sys localize` / `sys update` read and write the project values at `values/<sys_name>/` (resolved from `ops-prj.yml`), so customer values win even if `<sys>/values` is not a symlink. Run `gops prj reimport` to (re)establish the `<sys>/values` symlink.
@@ -363,6 +367,7 @@ Inside an ops project: when the system dir sits under a project root whose `ops-
 ## Delivery audits (drift & lock)
 
 - **`gops sys check`** — read-only **drift** report. Re-computes the merged values (same order as `sys localize`) and diffs them against the existing `<sys>/.env`, printing `KEY: old -> new` / `+key` / `-key`. Exit≠0 when drifted ("values changed but not re-localized"); exits 0 with `[INFO] 尚无 .env 基线` when never localized. No reconcile.
+- **`gops sys diff` / `gops mod diff`** — read-only **value-change table** (initial defaults vs effective), answering *which* values are overridden and by which layer (origin) — not the same question as `check` (`.env` drift vs current merge). See CLI section.
 - **`deliver.lock`** — written by `gops sys package` at the system root and shipped inside the tarball. Records `lockfile_version` / `name` / `version` / `kind` / `model` / module refs (`name`/`model`/`enable`/`addr`) and `sha256:` fingerprints of `sys/merged_vars.yml` and the whole `values/` tree. Answers "which version, which values"; `generated_at` changes per package (expect churn).
 - **`gops prj doctor [--strict]`** — read-only check that a project's customer values are version-controlled (see CLI section).
 

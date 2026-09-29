@@ -1,5 +1,12 @@
 # 变更日志
 
+## [0.2.9] - 2026-09-30
+
+### gops-engineering：值变更表（`sys diff` / `mod diff`）
+
+- 新增 `gops sys diff [--json]` 与 `gops mod diff [--json]`：只读比对「初始默认值」与「生效值」，逐键列出 `KEY`/`INITIAL`/`EFFECTIVE`/`ORIGIN`/`MUTABILITY`/`STATE`（只列非 `same` 行）；`localize` 结束时打印同一张表
+- 澄清与 `sys check` 的分工：`check` 看「`.env` 与当前合并值的漂移」，`diff` 看「哪些值被覆盖、被哪一层覆盖（origin）」
+
 ## [0.2.8] - 2026-09-28
 
 ### gops-engineering：host 内嵌工程直接摊在 `spec/` 下，不再套子目录
