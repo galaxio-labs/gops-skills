@@ -5,6 +5,9 @@
 ### gops-engineering：值变更表（`sys diff` / `mod diff`）与文件变更表
 
 - 新增 `gops sys diff [--json]` 与 `gops mod diff [--json]`：只读比对「初始默认值」与「生效值」，逐键列出 `KEY`/`INITIAL`/`EFFECTIVE`/`ORIGIN`/`MUTABILITY`/`STATE`（只列非 `same` 行）；`localize` 结束时打印同一张表
+- **gxl 系统按模块分组**：`sys diff` / `localize` 除系统层外，还逐模块呈现 `[mod: <name>]`（`values/<mod>/mod_value.yml` 是 localize 真正消费的覆盖层）；模块内容未下载时 `[WARN]`
+- **值文件键大小写不敏感**（加载时归一化为大写）——此前小写键（`cpu: 2000`）会被静默忽略
+- `sys diff --json` 为 `{ "system": [...], "modules": [{ "module": …, "changes": [...] }] }`（破坏性：由数组改为对象）
 - `localize`（`sys` / `mod`）新增**文件变更表**：渲染落地后报 `FILE | STATE`（`created` / `replaced`），用前后内容指纹（sha256）比对（清空再重建不误报未变文件，删除不报）
 - 澄清与 `sys check` 的分工：`check` 看「`.env` 与当前合并值的漂移」，`diff` 看「哪些值被覆盖、被哪一层覆盖（origin）」；新增/替换文件需基线，故只在 `localize` 呈现
 
