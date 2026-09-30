@@ -219,7 +219,7 @@ The scaffold leaves `install` / `start` / `stop` as no-ops (`empty_operators` su
 - `stop`: `cat` the pid file → `kill` → **wait for exit** → remove the pid file. The wait matters:
   without it, `gx run stop && gx run start` races on the app's per-work-root lock
   (`<work-root>/.run/.lock`) and the new instance exits non-zero (`another wparse instance is already using work-root`).
-- Silence the command echo in `gx.shell`/`gx.cmd` with `silence: "true"` (see `skills/gx-engineering/SKILL.md`),
+- Silence the command echo in `gx.shell`/`gx.cmd` with `silence: "true"` (see the separate **gx-skills** collection, skill `gx-engineering`: https://github.com/galaxio-labs/gx-skills),
   otherwise the whole shell one-liner is printed and the real one-line status is buried.
 
 ### Embedded app project: make `spec/` the work-root (no extra subdir)

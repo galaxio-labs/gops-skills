@@ -1,16 +1,16 @@
 ---
 name: gops-skills
-description: "Use when working with Galaxy project tooling — the gops CLI (galaxy-ops: organizing, configuring and delivering modules, systems and ops projects) and the gx CLI (galaxy-flow: defining and running GXL workflows). This collection routes to nested skills for gops and gx usage."
+description: "Use when working with gops (galaxy-ops): creating/updating/localizing modules, systems and ops projects; module layout & ModelSTD; building mods/systems from real upstream repos; localize semantics; runtime ops; k8s modules with Helm (helm_ops); docker-compose systems; ${SEC_xxx} secrets; and upgrading gops. Routes to the gops-engineering skill."
 ---
 
 # Gops Skills
 
-Top-level collection for Galaxy project skills: `gops` (galaxy-ops) and `gx` (galaxy-flow).
+Top-level collection for `gops` (galaxy-ops) skills. `gx` (galaxy-flow) skills live separately in https://github.com/galaxio-labs/gx-skills.
 
 ## Routing
 
 - For `gops` — `gops mod/sys/prj`, module layout / `ModelSTD`, building a mod from a real upstream repo (host release artifacts), `gops mod localize` semantics (`setting.yml` includes/excludes, the `local/` wipe), module runtime ops + embedded app project layout (`start`/`stop`), building a system from real modules, delivery audits (`gops sys check` drift, `deliver.lock`, `gops prj doctor`), k8s modules with Helm (`helm_ops`), the ops-gxl op-flow contract, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `merged_vars.yml`, `values/value.yml` customer overrides, `prj reimport`, value/localize flows, and **upgrading gops** (`self update` + the post-upgrade migration checklist) — read `skills/gops-engineering/SKILL.md`.
-- For `gx` — `gx run/adm/init/mod/doc/check/self`, GXL workflow authoring and pitfalls (`gx.shell`/`gx.cmd`, `silence`, backgrounding), built-in `gx.*` capabilities, and `_gal/` conventions — read `skills/gx-engineering/SKILL.md`.
+- For `gx` — GXL workflows and `gx.*` authoring — use the separate **gx-skills** collection: https://github.com/galaxio-labs/gx-skills (skill `gx-engineering`).
 - If a nested skill references files, resolve them relative to its own directory.
 - Do not load every nested skill by default. Pick only the one matching the user's task.
 
@@ -23,4 +23,3 @@ Top-level collection for Galaxy project skills: `gops` (galaxy-ops) and `gx` (ga
 ## Validation
 
 - gops: `cargo build` / `cargo test` in `galaxy-ops`.
-- gx: `cargo build` / `cargo test` in `galaxy-flow`.

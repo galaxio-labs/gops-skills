@@ -1,17 +1,13 @@
 # Gops Skills
 
-Focused skills for the Galaxy project toolchain, currently centered on:
-
-- `gops` (`galaxy-ops`) — organizing, configuring and delivering modules, systems and ops projects.
-- `gx` (`galaxy-flow`) — defining and running GXL workflows.
+Focused skills for `gops` (galaxy-ops) — organizing, configuring and delivering modules, systems and ops projects. `gx` (galaxy-flow) skills live separately in [gx-skills](https://github.com/galaxio-labs/gx-skills).
 
 The repo is organized as a top-level router skill plus nested tool-specific skills under `skills/`.
 
 ## Available Skills
 
-- `gops-skills` — top-level router for Galaxy gops/gx tasks.
+- `gops-skills` — top-level router for gops tasks.
 - `gops-engineering` — recommended `gops` usage: `mod`/`sys`/`prj`, module layout & `ModelSTD`, building a mod from a real upstream repo (host release artifacts), `gops mod localize` semantics & module runtime ops (`start`/`stop`), k8s modules with Helm (`helm_ops`), the ops-gxl op-flow contract, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `merged_vars.yml`, `values/value.yml`, `prj reimport`, and upgrading `gops` (self-update + post-upgrade migration checklist).
-- `gx-engineering` — recommended `gx` usage: `run`/`adm`/`init`/`mod`/`doc`/`check`/`self`, GXL authoring & pitfalls, built-in `gx.*` capabilities.
 
 ## Installation
 
@@ -40,7 +36,6 @@ Install a single skill by name (local checkout first, remote clone fallback):
 
 ```bash
 ./install.sh gops-engineering --codex
-./install.sh gx-engineering --claude
 ```
 
 Remote install (no local checkout):
@@ -72,9 +67,7 @@ gops-skills/
 ├── agents/
 │   └── openai.yaml
 └── skills/
-    ├── gops-engineering/
-    │   └── SKILL.md
-    └── gx-engineering/
+    └── gops-engineering/
         └── SKILL.md
 ```
 

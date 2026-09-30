@@ -1,5 +1,16 @@
 # 变更日志
 
+## [0.2.12] - 2026-09-30
+
+### 变更
+
+- **拆出 `gx` 相关 skill**：`gx-engineering` 移入独立的 [gx-skills](https://github.com/galaxio-labs/gx-skills) 仓（顶层路由 `gx-skills` + `gx-engineering`），本仓收敛为 gops 专用
+- 顶层 `gops-skills` 路由、README 与 `agents/openai.yaml` 只描述 gops，并对 gx 提供指向 `gx-skills` 的交叉引用
+
+### 文档
+
+- README：说明 gx 已迁至 `gx-skills`；单 skill 安装示例改用 `gops-engineering`
+
 ## [0.2.11] - 2026-09-30
 
 ### 文档
