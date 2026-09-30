@@ -1,5 +1,11 @@
 # 变更日志
 
+## [0.2.13] - 2026-09-30
+
+### 修复
+
+- `gops-engineering` 里对 gx-skills 的交叉引用由 `gx-engineering` 更正为 `gxl-authoring`（gx-skills 已拆成 `gx-cli` + `gxl-authoring`）
+
 ## [0.2.12] - 2026-09-30
 
 ### 变更
