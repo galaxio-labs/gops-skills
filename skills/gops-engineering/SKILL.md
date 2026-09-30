@@ -57,6 +57,46 @@ Runtime operations on the target system (operator-flow contract); dispatch by `s
 - `gops self update [--channel …] [--to <ver>] [--yes] [--dry-run] [--force]` — download, verify (sha256), install, and back up the current binary; auto-rolls back if the new `--version` health check fails.
 - `gops self rollback [--id <14-digit>]` — restore the most recent (or given) backup.
 - Source of truth is the same `galaxio-labs/get` manifest as `inst-x.sh gops <channel>`; state/lock/backups live in `~/.galaxy/self_update/gops` (namespaced apart from `gx`).
+- Upgrading the binary is only part of the work — see **Upgrading gops** below for the post-upgrade migration steps.
+
+## Upgrading gops
+
+Releases are published per channel (`v<x.y.z>-alpha|beta|stable`) and self-update from the same `galaxio-labs/get` manifest `inst-x.sh` uses:
+
+```bash
+gops self check  --channel alpha          # what is available
+gops self update --channel alpha --yes    # install + back up the current binary
+gops self rollback                        # undo the last update
+```
+
+**After upgrading, do this (once per system / project):**
+
+1. **Read that release's notes first** — `galaxy-ops/CHANGELOG.md`, plus `UPGRADE.md` for breaking changes.
+2. **Run `gops sys update` on each existing system.** This performs the layout migration and is idempotent: modules materialize under `sys/<model>/mods/<mod>/`, the legacy `sys/mods/` is removed, `.gitignore` gains `sys/*/mods`, and legacy `dst` entries in `sys/setting/list.yml` are rewritten. Reads already fall back to the legacy layout, so systems keep working before you run it — run it anyway, then commit the result.
+3. **Re-`localize` and re-check** — `gops sys localize` (and `gops mod localize` for mod repos). The value/file change tables show exactly what moved; afterwards `gops sys check` must be clean (exit 0).
+4. **Re-`package`** anything you ship (`gops sys package`) so `deliver.lock` matches the upgraded layout.
+5. **Grep your scripts / CI** for the renamed commands and flags (table below).
+
+**Breaking changes to expect (2.x):**
+
+| Change | From → To |
+|---|---|
+| Runtime ops moved out of `gops sys` | `gops sys start` / `stop` / `status` / `download` / `install` / `uninstall` / `diagnose` → **`gops run <cmd>`** |
+| Package mode flag | `sys package --no-git` → `--full` (old name still works as a hidden alias) |
+| Module layout | `sys/mods/<mod>/<model>/` → `sys/<model>/mods/<mod>/` (auto-migrated by `sys update`) |
+| Op-flow channel | scaffolded `extern` must point at `galaxio-hub/ops-gxl` **`2.0`** (`main` only serves the legacy layout) |
+| `sys diff --json` | flat array → `{ "system": [...], "modules": [...], "files": [...] }` |
+
+**Behaviour fixes that change results (not just polish):**
+
+- **Value-file keys are case-insensitive now** (normalized to uppercase on load). Long-standing overrides that “never seemed to apply” because they were written lowercase (`cpu: 2000`) now take effect — after upgrading, re-read `gops sys diff` / `gops mod diff` and confirm the effective values are what you want.
+- **`sys check` flags definition staleness**: `[WARN]` when `sys/setting/vars.yml` (or other definitions) is newer than `sys/merged_vars.yml`; it does **not** change the exit code.
+- **Downloads no longer leave partial files**: an interrupted `gops run download` / `gx.download` writes `<file>.part` and renames on success. Files truncated by an **older** `gops` are still trusted by `reuse_cache` — delete them (or force a re-download) once after upgrading.
+
+**Version traps:**
+
+- `gxl` dispatch shells out to `$HOME/bin/gx`, so a **stale `gx` on PATH** silently keeps old behaviour; `gx >= 0.13` is required, `>= 0.14` for the `gx run --exists` probe used by docker-compose stage flows.
+- Same for `gops` itself: after `self update`, confirm the binary you exercise is the new one (`gops --version` / the `gops: x.y.z` banner).
 
 ## Modules (`gops mod`)
 

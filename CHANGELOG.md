@@ -1,5 +1,15 @@
 # 变更日志
 
+## [0.2.10] - 2026-09-30
+
+### gops-engineering：新增「升级 gops」章节
+
+- 新增 `## Upgrading gops`：自升级命令（`self check` / `self update` / `self rollback`）＋升级后 5 步迁移清单（先读该版 `CHANGELOG.md`/`UPGRADE.md`、逐系统 `gops sys update`、重跑 `localize` 并用 `sys check` 验证、重 `package`、grep 脚本/CI 改命令）
+- 2.x 破坏性变更表：`gops sys start`/`stop`/… → `gops run <cmd>`；`sys package --no-git` → `--full`（旧名仍可用）；模块布局 `sys/mods/<mod>/<model>/` → `sys/<model>/mods/<mod>/`（`sys update` 自动迁移）；算子 `extern` 指向 `galaxio-hub/ops-gxl` 的 `2.0` 线；`sys diff --json` 改为对象
+- 会导致结果变化的行为修复：值文件键大小写不敏感（此前静默失效的小写键从此生效）、`sys check` 对定义陈旧给 `[WARN]`（不改退出码）、下载不再留半包（旧版遗留的半包仍会被 `reuse_cache` 信任，升级后需清理）
+- 版本陷阱：`gxl` 分派走 `$HOME/bin/gx`，PATH 上的旧 `gx` 会静默保留旧行为（`gx >= 0.14` 才有 `--exists`）；`gops` 自身升级后要确认跑的是新二进制
+- 顶层 `SKILL.md` 与 `README.md` 路由行同步
+
 ## [0.2.9] - 2026-09-30
 
 ### gops-engineering：值变更表（`sys diff` / `mod diff`）与文件变更表
