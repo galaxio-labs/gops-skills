@@ -15,7 +15,20 @@ The repo is organized as a top-level router skill plus nested tool-specific skil
 
 ## Installation
 
-Install the whole collection (router + nested skills):
+### With `gops` (recommended)
+
+If you have `gops` installed, use its native installer — no shell script, no `python3` / `ruby`:
+
+```bash
+gops self skill install                 # whole collection; auto-detects installed platforms
+gops self skill list                    # list installable skills
+```
+
+`--source` accepts `owner/repo`, a git URL, or a local checkout; `--ref` selects a branch / tag; `--target codex|claude|zed|all` and `--dir <path>` choose destinations (both repeatable). Every `SKILL.md` frontmatter is validated before installing (built-in YAML parser, no external interpreter).
+
+### With `install.sh`
+
+Use this when you do not have `gops` yet (bootstrapping). Install the whole collection (router + nested skills):
 
 ```bash
 ./install.sh                          # install all available platforms

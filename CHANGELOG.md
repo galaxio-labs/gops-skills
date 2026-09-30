@@ -1,5 +1,11 @@
 # 变更日志
 
+## [0.2.11] - 2026-09-30
+
+### 文档
+
+- README 新增「With `gops`（推荐）」：用 `gops self skill install` / `list` 原生安装（无需 `install.sh` / `python3` / `ruby`）；`install.sh` 降为没有 `gops` 时的引导安装
+
 ## [0.2.10] - 2026-09-30
 
 ### gops-engineering：新增「升级 gops」章节
