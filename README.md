@@ -7,7 +7,7 @@ The repo is organized as a top-level router skill plus nested tool-specific skil
 ## Available Skills
 
 - `gops-skills` — top-level router for gops tasks.
-- `gops-engineering` — recommended `gops` usage: `mod`/`sys`/`prj`, module layout & `ModelSTD`, building a mod from a real upstream repo (host release artifacts), `gops mod localize` semantics & module runtime ops (`start`/`stop`), k8s modules with Helm (`helm_ops`), the ops-gxl op-flow contract, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `merged_vars.yml`, `values/value.yml`, `prj reimport`, and upgrading `gops` (self-update + post-upgrade migration checklist).
+- `gops-engineering` — recommended `gops` usage: `mod`/`sys`/`prj`, module layout & `ModelSTD`, building a mod from a real upstream repo (host release artifacts), `gops mod localize` semantics & module runtime ops (`start`/`stop`), k8s modules with Helm (`helm_ops`), the ops-gxl op-flow contract, docker-compose system type dispatch, `${SEC_xxx}` secrets, `sys/sys_model.yml` `kind`, `merged_vars.yml`, `values/value.yml`, the ops-project site-state model (`gops prj sync`/`backup`/`restore`/`contract`/`upgrade`; `sys-prj.yml` `protect`/`contract`/`backup`; `ops-prj.yml` `backup`/`contract`), and upgrading `gops` (self-update + post-upgrade migration checklist).
 
 ## Installation
 

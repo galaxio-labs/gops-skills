@@ -1,6 +1,6 @@
 ---
 name: gops-engineering
-description: "Use when working with gops (galaxy-ops): creating/updating/localizing modules, systems and ops projects; module layout and ModelSTD; k8s modules with Helm (helm_ops); the ops-gxl op-flow contract; marking a system as docker-compose type; wiring ${SEC_xxx} secrets; working with sys/sys_model.yml kind, merged_vars.yml, values/value.yml customer overrides, and prj reimport."
+description: "Use when working with gops (galaxy-ops): creating/updating/localizing modules, systems and ops projects; module layout and ModelSTD; k8s modules with Helm (helm_ops); the ops-gxl op-flow contract; marking a system as docker-compose type; wiring ${SEC_xxx} secrets; working with sys/sys_model.yml kind, merged_vars.yml, values/value.yml customer overrides; and the ops-project site-state model (gops prj sync/backup/restore/contract/upgrade, sys-prj.yml protect/contract/backup, ops-prj.yml backup/contract)."
 ---
 
 # Gops Engineering
@@ -47,8 +47,16 @@ Runtime operations on the target system (operator-flow contract); dispatch by `s
 
 ### gops prj
 
-- `gops prj new --name <n>`, `gops prj import --path <pkg> [--force <0..3>]`, `gops prj update [--force <0..3>]`, `gops prj reimport [--force <0..3>]`.
-- `gops prj doctor [--strict]` — check that the project's `values/` is tracked by git (exists, a `values/<sys>/` per imported system, not `.gitignore`d, no uncommitted changes under `values/`); `--strict` escalates warnings to errors (CI gate).
+Ops project (`ops-prj.yml`): import a packaged system, keep it in sync over time, and manage its **site state** — files inside the system dir that are not part of the delivery package and must survive upgrades (declared in `sys-prj.yml` `protect:` / `contract:` / `backup:`).
+
+- `gops prj new --name <n>` — scaffold a project.
+- `gops prj import --path <pkg> [--force]` — import a packaged system (local `.tar.gz` / git repo / http(s)) and record it in `ops-prj.yml` `sys_models`; creates `<sys>/values` → `<project>/values/<sys_name>`.
+- `gops prj sync [--force]` (**alias `update`**) — **non-destructive** content sync to each system's `addr`: overlays **package files only** (`protect:` / `contract:` never touched, nothing deleted), imports systems whose dir is **missing**, refreshes project `work_envs`, rewrites `ops-prj.yml`. **Not** transactional (no backup/rollback/health) — for a rollbackable release use `prj upgrade`.
+- `gops prj backup` — collect **site state** (each system's `sys-prj.yml` `backup:` ∪ `contract:`, plus project `ops-prj.yml` `backup:` target/keep/per-system include·exclude) into one archive (manifest + sha256; key-bearing entries are flagged for off-box storage); keeps the last `keep`.
+- `gops prj restore [<archive>] [--list] [--dry-run]` — merge a backup archive back into the site (unpack to temp, then overwrite). `--list` only lists; `--dry-run` unpacks to verify without touching the site.
+- `gops prj contract export` / `gops prj contract import <archive>` — archive / restore the **external contracts** (`sys-prj.yml` `contract:`) to/from the `ops-prj.yml` `contract:` target (target / keep).
+- `gops prj upgrade [<sys>] --to <version|addr> --on-failure rollback-all|halt [--dry-run] [--health-cmd …] [--json]` — **transactional release upgrade** (kind: docker-compose only): diagnose → backup → apply → regenerate (`sys update`+`localize`) → pull → up → health, with failure policy per `--on-failure`.
+- `gops prj diagnose [--strict]` (**alias `doctor`**) — read-only site-state audit: `values/` tracked by git (exists, per-system `values/<sys>/`, not ignored, no uncommitted changes), `ignore ⊆ protect`, duplicate `sys_models`, missing `backup`, contract missing/overlap, etc. `--strict` escalates warnings to errors (CI gate).
 
 ### gops self
 
@@ -86,6 +94,9 @@ gops self rollback                        # undo the last update
 | Module layout | `sys/mods/<mod>/<model>/` → `sys/<model>/mods/<mod>/` (auto-migrated by `sys update`) |
 | Op-flow channel | scaffolded `extern` must point at `galaxio-hub/ops-gxl` **`2.0`** (`main` only serves the legacy layout) |
 | `sys diff --json` | flat array → `{ "system": [...], "modules": [...], "files": [...] }` |
+| Ops-project commands (2.3) | `gops prj update` → **`gops prj sync`** (old name kept as hidden alias); `gops prj rebuild` and `gops prj reimport` **removed**; `gops prj doctor` → **`gops prj diagnose`** (old name kept as hidden alias) |
+| `sys-prj.yml` site-state keys (2.3) | `preserve:` → **`protect:`** (old name still readable); `backup:` is now a **flat list** (the old nested `{restore, rebuild}` form is gone) |
+| Local package `addr.path` (2.3) | now resolved **relative to the project root** (was relative to the process CWD) |
 
 **Behaviour fixes that change results (not just polish):**
 
@@ -371,7 +382,7 @@ vender: ''
 
 ## Files
 
-- `sys-prj.yml`: `SysConf` (`test_envs`; optional `ignore:` glob list applied by `sys package` in both modes).
+- `sys-prj.yml`: `SysConf` — `test_envs` (deps: `dep_root` + `deps`); `ignore:` (glob list skipped by `sys package` in both modes); `protect:` (site state: `sync` never overwrites/deletes it; legacy alias `preserve`); `contract:` (external contract: declaring it ⇒ auto-`protect` + auto-`backup` + not packaged); `backup:` (flat list of site state `prj backup` collects).
 - `sys/sys_model.yml`: system definition (`name` / `model` optional / `kind` / `vender`); `kind` defaults to `gxl` and is **omitted from the file when it is `gxl`** (only `docker-compose` is serialized).
 - `sys/mod_list.yml`: module list (optional for pure compose).
 - `sys/setting/vars.yml`: system variable definitions (source, versioned).
@@ -406,20 +417,27 @@ To see **which** values are overridden and by which layer, use `gops sys diff` (
 
 `sys localize` 默认先解析变量（等价于先跑一次 `sys update`），所以新系统一条 `sys localize` 就够；`--only` 跳过解析（用现有 `sys/merged_vars.yml`，缺失则报错）。显式 `sys update` 仍适用于打包前预解析、打印变量参考等场景。
 
-Inside an ops project: when the system dir sits under a project root whose `ops-prj.yml` lists it, `sys localize` / `sys update` read and write the project values at `values/<sys_name>/` (resolved from `ops-prj.yml`), so customer values win even if `<sys>/values` is not a symlink. Run `gops prj reimport` to (re)establish the `<sys>/values` symlink.
+Inside an ops project: when the system dir sits under a project root whose `ops-prj.yml` lists it, `sys localize` / `sys update` read and write the project values at `values/<sys_name>/` (resolved from `ops-prj.yml`), so customer values win even if `<sys>/values` is not a symlink. Run `gops prj sync` to (re)establish the `<sys>/values` symlink (it also imports a missing system dir).
 
 ## Delivery audits (drift & lock)
 
 - **`gops sys check`** — read-only **drift** report. Re-computes the merged values (same order as `sys localize`) and diffs them against the existing `<sys>/.env`, printing `KEY: old -> new` / `+key` / `-key`. Exit≠0 when drifted ("values changed but not re-localized"); exits 0 with `[INFO] 尚无 .env 基线` when never localized. No reconcile.
 - **`gops sys diff` / `gops mod diff`** — read-only **value-change table** (initial defaults vs effective), answering *which* values are overridden and by which layer (origin) — not the same question as `check` (`.env` drift vs current merge). See CLI section.
 - **`deliver.lock`** — written by `gops sys package` at the system root and shipped inside the tarball. Records `lockfile_version` / `name` / `version` / `kind` / `model` / module refs (`name`/`model`/`enable`/`addr`) and `sha256:` fingerprints of `sys/merged_vars.yml` and the whole `values/` tree. Answers "which version, which values"; `generated_at` changes per package (expect churn).
-- **`gops prj doctor [--strict]`** — read-only check that a project's customer values are version-controlled (see CLI section).
+- **`gops prj diagnose [--strict]`** — read-only audit of a project's site state and customer-value version-control (see CLI section).
 
-## prj import / reimport
+## prj: project file & site-state model
 
-- `prj import --path <pkg>` imports a packaged system. `<pkg>` must be a local `.tar.gz`, a `.git` / `git@` repo URL, or an http(s) `.tar.gz` / `.git` URL — **NOT a bare directory** (`convert_addr` rejects anything else). The archive must contain a `sys/` dir at its root.
-- `prj reimport` re-imports from `ops-prj.yml` `sys_models`, preserving `values/`; import/reimport create `<sys>/values` as a symlink to `<project>/values/<sys_name>`.
-- `ops-prj.yml` merged the old `ops-systems.yml` (fields: `name` + `work_envs` + `sys_models`).
+`ops-prj.yml` (`OpsProjectConf`) fields:
+
+- `name`, `work_envs` (`{dep_root, deps}` — refreshed by `prj sync`), `sys_models` (imported systems: each `{sys: {name, model, kind, vender}, addr, version?}`).
+- `backup: {target, keep, systems: [{name, include, exclude}]}` — where project backups land, how many to keep, and per-system include/exclude on top of the system's own `backup:`.
+- `contract: {target, keep}` — where `prj contract export` writes, how many to keep.
+- `sys_models[].addr` supports a `{version}` placeholder (paired with the entry's `version:`); a **local** `addr.path` resolves **relative to the project root** (portable, e.g. `../../sys-operators/x.tar.gz`). `ops-prj.yml` merged the legacy `ops-systems.yml`.
+
+`prj import --path <pkg>` imports a packaged system. `<pkg>` must be a local `.tar.gz`, a `.git` / `git@` repo URL, or an http(s) `.tar.gz` / `.git` URL — **NOT a bare directory** (`convert_addr` rejects anything else). The archive must contain a `sys/` dir at its root. Import (and the missing-system branch of `prj sync`) create `<sys>/values` as a symlink to `<project>/values/<sys_name>`.
+
+**Site state** = files inside the system dir that are **not** part of the delivery package and must survive upgrades. Declared in `sys-prj.yml`: `protect:` (never overwritten/deleted), `backup:` (collected by `prj backup`), and `contract:` (external, non-rebuildable public facts — auto-included in `protect` + `backup` and excluded from packages). `prj sync` overlays package files only; `prj backup` / `restore` collect/restore site state; `gops prj diagnose` audits the declarations.
 
 ## Pitfalls
 

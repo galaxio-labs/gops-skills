@@ -1,5 +1,15 @@
 # 变更日志
 
+## [0.2.14] - 2026-10-12
+
+### gops-engineering：对齐 galaxy-ops 2.3 — ops 项目「现场态」模型
+
+- `gops prj` 命令面重写：`update` → **`sync`**（旧名隐藏别名）、`doctor` → **`diagnose`**（旧名隐藏别名）；新增 `backup` / `restore` / `contract export|import` / `upgrade`；**移除 `rebuild` 与 `reimport`**（`reimport` 的“补齐缺失系统”并入 `prj sync`）
+- 记录 `sys-prj.yml`（`SysConf`）字段：`test_envs`、`ignore`、`protect`（旧名 `preserve`）、`contract`（声明即自动纳入 protect + backup 且不进包）、`backup`（扁平列表）
+- 新增「prj：project file & site-state model」一节：`ops-prj.yml` 字段（`name` / `work_envs` / `sys_models` / `backup {target,keep,systems}` / `contract {target,keep}`）、`addr` 的 `{version}` 占位、本地 `addr.path` 以**项目根**为基准
+- 「升级 gops」破坏性变更表补充 2.3 行：prj 命令改名/移除、`preserve` → `protect`、`backup` 扁平化、本地 `addr.path` 基准变更
+- 顶层 `SKILL.md` / `README.md` 路由与 `gops-engineering` 的 `description` 同步
+
 ## [0.2.13] - 2026-09-30
 
 ### 修复
