@@ -1,5 +1,20 @@
 # 变更日志
 
+## [0.2.15] - 2026-10-12
+
+### gops-engineering：现场态声明彻底解耦
+
+- **`sys-prj.yml` 五个声明完全独立**：`pkg_include` / `pkg_exclude` / `protect` / `contract` / `backup`，各由各自的命令消费，**不做任何跨声明的推导 / 覆盖 / 交叠判断**：
+  - `pkg_include` / `pkg_exclude`：只服务 `gops sys package`
+  - `protect`：只服务 `gops sys update` / `prj sync` / `prj upgrade`
+  - `backup`：只服务 `gops prj backup` / `restore`
+  - `contract`：只服务 `gops prj contract export` / `import`
+- **`contract` 不再与 protect / backup / 打包关联**：0.2.14 记「声明 `contract` ⇒ 自动 protect + backup」；随后版本先移除 backup 耦合，本轮进一步移除 protect 耦合 —— `contract` 现在**只**走独立归档（`gops prj contract export` / `import`），**不**隐式影响 protect / backup / 打包
+- **文档更正**：删除 `pkg_exclude ⊆ protect` 不变式、`contract` 的「不进包」说法，以及 `prj diagnose` 的跨声明检查（`contract.overlap` / `backup.missing` / `protect.covers_*`）；`prj diagnose` 只做各声明**自身**的检查
+- **`sys-prj.yml` 的 `ignore:` 更名为 `pkg_exclude:`**（旧名 `ignore` 仍可读）
+- **新增 `sys-prj.yml: pkg_include:`**：在基准集（git 入库文件 / `--full` 整目录）之外额外纳入路径（默认模式补未被 git 跟踪的文件）；`pkg_exclude` 优先
+- 同步更新 `gops prj sync/backup/diagnose/contract`、`gops sys package` 说明、「Files」的 `sys-prj.yml` 行、「prj：project file & site-state model」一节
+
 ## [0.2.14] - 2026-10-12
 
 ### gops-engineering：对齐 galaxy-ops 2.3 — ops 项目「现场态」模型
