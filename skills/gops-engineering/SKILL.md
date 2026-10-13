@@ -28,16 +28,14 @@ Three layers: `Module -> System -> Ops Project`.
 ### gops sys
 
 - `gops sys new --name <n> [--kind gxl|docker-compose]` — without `--kind` it is **interactive** (choose kind, then `ModelSTD` for `gxl`); `TEST_MODE=1` auto-selects `gxl` + the first supported model. There is currently no `--model` flag.
-- `gops sys update [--force]` — resolve vars, generates `sys/merged_vars.yml` and a `values/sys_value.yml` comment template
-- `gops sys package [--force] [--output <path>] [--full]` — update then package into `<name>-<version>.tar.gz`; **default packs only git-tracked files** (no artifacts), `--full` packs the whole dir (incl. artifacts/localized output, for air-gapped delivery); writes `deliver.lock` (see Delivery audits). **Both modes exclude paths listed in `sys-prj.yml`'s `pkg_exclude:`** (legacy alias `ignore`; glob, anchored at the system root — bare `mods` matches only root-level, use `**/mods` for any depth; `*` does not cross `/`; a directory pattern like `sys/*/mods` excludes the whole subtree; leading `/` or `./` is normalized). **`pkg_include:` additionally pulls in files the base set wouldn't have** (mainly default mode — ship untracked/generated files without `--full`, overriding `.gitignore`); `pkg_exclude` wins over `pkg_include`. `deliver.lock` is never ignored. Overly broad patterns (`*`) will also drop `sys/merged_vars.yml`.
-- `gops sys localize [--mod <module>] [--only]` — by default **always re-resolves first** (the var-resolve stage, i.e. `update` without the localize), so editing `sys/setting/vars.yml` then running `localize` takes effect in one command. Then merges default ⊕ `values/sys_value.yml` ⊕ `values/value.yml` → `.env` (`--only` always skips the resolve step and uses the existing `sys/merged_vars.yml`). Prints a value-change table, plus a **file-change table** for rendered sys-setting templates (`created` / `replaced`, before/after content sha256).
-- `gops sys check` — read-only drift check: recompute the merged values and diff against the existing `.env`; exit≠0 when drifted ("values changed but not re-localized"). Also prints `[WARN]` when a var definition is newer than `sys/merged_vars.yml` (definition-level staleness not visible in `.env`); the warning does not change the exit code.
+- `gops sys resolve [--force]` (legacy alias `update`) — resolve the system definition: fetch each module's `addr` into `sys/<model>/mods/<mod>/`, resolve module/system deps, aggregate module vars ⊕ `sys/setting/vars.yml` into `sys/merged_vars.yml`, and (re)generate the `values/sys_value.yml` comment template. Does **not** write `.env` (that is `sys localize`) and does **not** touch the running stack (that is `gops run`).
+- `gops sys package [--force] [--output <path>] [--full]` — resolve then package into `<name>-<version>.tar.gz`; **default packs only git-tracked files** (no artifacts), `--full` packs the whole dir (incl. artifacts/localized output, for air-gapped delivery); writes `deliver.lock` (see Delivery audits). **Both modes exclude paths listed in `sys-prj.yml`'s `pkg_exclude:`** (legacy alias `ignore`; glob, anchored at the system root — bare `mods` matches only root-level, use `**/mods` for any depth; `*` does not cross `/`; a directory pattern like `sys/*/mods` excludes the whole subtree; leading `/` or `./` is normalized). **`pkg_include:` additionally pulls in files the base set wouldn't have** (mainly default mode — ship untracked/generated files without `--full`, overriding `.gitignore`); `pkg_exclude` wins over `pkg_include`. `deliver.lock` is never ignored. Overly broad patterns (`*`) will also drop `sys/merged_vars.yml`.
+- `gops sys localize [--mod <module>] [--only]` — by default **always re-resolves first** (the var-resolve stage, i.e. `sys resolve` without the localize), so editing `sys/setting/vars.yml` then running `localize` takes effect in one command. Then merges default ⊕ `values/sys_value.yml` ⊕ `values/value.yml` → `.env` (`--only` always skips the resolve step and uses the existing `sys/merged_vars.yml`). Prints a value-change table, plus a **file-change table** for rendered sys-setting templates (`created` / `replaced`, before/after content sha256). Prints `[WARN]` if a var definition (`sys/setting/vars.yml` etc.) is newer than `sys/merged_vars.yml` — mainly under `--only`, which skips the re-resolve.
 - `gops sys diff [--json]` — read-only **value-change table**: initial `sys/merged_vars.yml` defaults (`sys-defaults`) vs effective values (⊕ `values/sys_value.yml` `sys-setting` ⊕ `values/value.yml` `customer`). Columns `KEY`/`INITIAL`/`EFFECTIVE`/`ORIGIN`/`MUTABILITY`/`STATE`; only non-`same` rows shown. Compares **un-expanded** values (before `${VAR}` eval) to avoid false changes. `gops sys localize` prints the same table at the end. `gops prj diff` is not provided.
-  - **gxl systems: module groups.** `sys localize` consumes `values/<mod>/mod_value.yml` per module (`ModuleSpecRef::sys_localize`), so `sys diff`/`localize` also present `[mod: <name>]` groups (initial = `sys/<model>/mods/<mod>/vars.yml`; effective ⊕ `values/<mod>/value.yml` ⊕ `values/<mod>/mod_value.yml` ⊕ the sys layer). A module whose content dir is missing prints `[WARN]` and is skipped (`gops sys update` first).
+  - **gxl systems: module groups.** `sys localize` consumes `values/<mod>/mod_value.yml` per module (`ModuleSpecRef::sys_localize`), so `sys diff`/`localize` also present `[mod: <name>]` groups (initial = `sys/<model>/mods/<mod>/vars.yml`; effective ⊕ `values/<mod>/value.yml` ⊕ `values/<mod>/mod_value.yml` ⊕ the sys layer). A module whose content dir is missing prints `[WARN]` and is skipped (`gops sys resolve` first).
   - `--json` shape is `{ "system": [...], "modules": [{ "module": …, "changes": [...] }], "files": [{ "target": …, "changes": [...] }] }` (only groups with changes).
   - **File overrides**: `sys diff` also lists files that `sys/setting/<mod>/**` **adds/replaces** relative to the module's `<mod>/spec/**` (both are rendered into `local/` by localize, so this is the file-level configuration delta). Pure path + content (sha256) comparison — no rendering, and independent of the last localize's on-disk state.
   - Value-file keys are **case-insensitive** (normalized to upper on load); before this, lowercase keys like `cpu: 2000` silently did not match `CPU`.
-- `gops sys setting --init`
 
 ### gops run
 
@@ -55,7 +53,7 @@ Ops project (`ops-prj.yml`): import a packaged system, keep it in sync over time
 - `gops prj backup` — collect **site state** = each system's `sys-prj.yml` `backup:` (**not** `contract:` — contracts have their own archive) plus project `ops-prj.yml` `backup:` target/keep/per-system include·exclude, into one archive (manifest + sha256; key-bearing entries are flagged for off-box storage); keeps the last `keep`.
 - `gops prj restore [<archive>] [--list] [--dry-run]` — merge a backup archive back into the site (unpack to temp, then overwrite). `--list` only lists; `--dry-run` unpacks to verify without touching the site.
 - `gops prj contract export` / `gops prj contract import <archive>` — archive / restore the **external contracts** (`sys-prj.yml` `contract:`) to/from the `ops-prj.yml` `contract:` target (target / keep).
-- `gops prj upgrade [<sys>] --to <version|addr> --on-failure rollback-all|halt [--dry-run] [--health-cmd …] [--json]` — **transactional release upgrade** (kind: docker-compose only): diagnose → backup → apply → regenerate (`sys update`+`localize`) → pull → up → health, with failure policy per `--on-failure`.
+- `gops prj upgrade [<sys>] --to <version|addr> --on-failure rollback-all|halt [--dry-run] [--health-cmd …] [--json]` — **transactional release upgrade** (kind: docker-compose only): diagnose → backup → apply → regenerate (`sys resolve`+`localize`) → pull → up → health, with failure policy per `--on-failure`.
 - `gops prj diagnose [--strict]` (**alias `doctor`**) — read-only site-state audit: `values/` tracked by git (exists, per-system `values/<sys>/`, not ignored, no uncommitted changes), duplicate `sys_models`, and each declaration's **own** completeness (e.g. `contract:` paths present). It never reasons **across** declarations. `--strict` escalates warnings to errors (CI gate).
 
 ### gops self
@@ -80,8 +78,8 @@ gops self rollback                        # undo the last update
 **After upgrading, do this (once per system / project):**
 
 1. **Read that release's notes first** — `galaxy-ops/CHANGELOG.md`, plus `UPGRADE.md` for breaking changes.
-2. **Run `gops sys update` on each existing system.** This performs the layout migration and is idempotent: modules materialize under `sys/<model>/mods/<mod>/`, the legacy `sys/mods/` is removed, `.gitignore` gains `sys/*/mods`, and legacy `dst` entries in `sys/setting/list.yml` are rewritten. Reads already fall back to the legacy layout, so systems keep working before you run it — run it anyway, then commit the result.
-3. **Re-`localize` and re-check** — `gops sys localize` (and `gops mod localize` for mod repos). The value/file change tables show exactly what moved; afterwards `gops sys check` must be clean (exit 0).
+2. **Run `gops sys resolve` on each existing system.** This performs the layout migration and is idempotent: modules materialize under `sys/<model>/mods/<mod>/`, the legacy `sys/mods/` is removed, `.gitignore` gains `sys/*/mods`, and legacy `dst` entries in `sys/setting/list.yml` are rewritten. Reads already fall back to the legacy layout, so systems keep working before you run it — run it anyway, then commit the result.
+3. **Re-`localize`** — `gops sys localize` (and `gops mod localize` for mod repos). The value/file change tables show exactly what moved.
 4. **Re-`package`** anything you ship (`gops sys package`) so `deliver.lock` matches the upgraded layout.
 5. **Grep your scripts / CI** for the renamed commands and flags (table below).
 
@@ -91,7 +89,7 @@ gops self rollback                        # undo the last update
 |---|---|
 | Runtime ops moved out of `gops sys` | `gops sys start` / `stop` / `status` / `download` / `install` / `uninstall` / `diagnose` → **`gops run <cmd>`** |
 | Package mode flag | `sys package --no-git` → `--full` (old name still works as a hidden alias) |
-| Module layout | `sys/mods/<mod>/<model>/` → `sys/<model>/mods/<mod>/` (auto-migrated by `sys update`) |
+| Module layout | `sys/mods/<mod>/<model>/` → `sys/<model>/mods/<mod>/` (auto-migrated by `sys resolve`) |
 | Op-flow channel | scaffolded `extern` must point at `galaxio-hub/ops-gxl` **`2.0`** (`main` only serves the legacy layout) |
 | `sys diff --json` | flat array → `{ "system": [...], "modules": [...], "files": [...] }` |
 | Ops-project commands (2.3) | `gops prj update` → **`gops prj sync`** (old name kept as hidden alias); `gops prj rebuild` and `gops prj reimport` **removed**; `gops prj doctor` → **`gops prj diagnose`** (old name kept as hidden alias) |
@@ -102,7 +100,7 @@ gops self rollback                        # undo the last update
 **Behaviour fixes that change results (not just polish):**
 
 - **Value-file keys are case-insensitive now** (normalized to uppercase on load). Long-standing overrides that “never seemed to apply” because they were written lowercase (`cpu: 2000`) now take effect — after upgrading, re-read `gops sys diff` / `gops mod diff` and confirm the effective values are what you want.
-- **`sys check` flags definition staleness**: `[WARN]` when `sys/setting/vars.yml` (or other definitions) is newer than `sys/merged_vars.yml`; it does **not** change the exit code.
+- **`sys localize` flags definition staleness**: it prints `[WARN]` when `sys/setting/vars.yml` (or other definitions) is newer than `sys/merged_vars.yml` — mainly under `--only`, which skips the re-resolve (this staleness is not visible by comparing `.env` alone).
 - **Downloads no longer leave partial files**: an interrupted `gops run download` / `gx.download` writes `<file>.part` and renames on success. Files truncated by an **older** `gops` are still trusted by `reuse_cache` — delete them (or force a re-download) once after upgrading.
 
 **Version traps:**
@@ -333,13 +331,13 @@ End-to-end recipe (verified composing `warp-parse` + `warp-fusion` into one `x86
 3. **List the modules** in `sys/mod_list.yml` — each ref has `name` / `addr` / `model` / `enable`. Use a **path address** for local modules (keeps everything offline):
    ```yaml
    - name: warp-parse
-     addr: { path: ../warp-parse }   # resolved relative to the cwd of `gops sys update`
+     addr: { path: ../warp-parse }   # resolved relative to the cwd of `gops sys resolve`
      model: x86-ubt22-k8s
      enable: true
    ```
 4. **Per-module localize list** `sys/setting/list.yml` (optional): `module -> {enable, localize:{src,dst}}`, where `src` = `${GXL_PRJ_ROOT}/sys/setting/<mod>` and `dst` = `${GXL_PRJ_ROOT}/sys/<model>/mods/<mod>/local/`.
 5. `sys/setting/vars.yml` holds **system-level** vars (may be empty).
-6. **`gops sys update`** then **`gops sys localize`**:
+6. **`gops sys resolve`** then **`gops sys localize`**:
    - copies each module's `mod/<model>/` into `sys/<model>/mods/<name>/` (modules are grouped by target model);
    - `sys/merged_vars.yml` merges **only the `system`-scope** vars of the modules (module-scope vars are not hoisted);
    - writes per-module `values/<mod>/mod_value.yml`, so two modules with the same var name (e.g. `IMAGE_TAG`) do **not** collide;
@@ -383,17 +381,17 @@ vender: ''
 
 ## Files
 
-- `sys-prj.yml`: `SysConf` — `test_envs` (deps: `dep_root` + `deps`); `pkg_include:` (extra paths pulled into the package beyond git-tracked/`--full`; mainly default mode; `pkg_exclude` wins); `pkg_exclude:` (glob list skipped by `sys package` in both modes; legacy alias `ignore`); `protect:` (site state: `sys update`/`prj sync`/`prj upgrade` never overwrite/delete it; legacy alias `preserve`); `contract:` (external contract: non-rebuildable public site facts, **independent** of the others — implies **no** `protect`/`backup`/packaging behavior, handled only by `prj contract export`/`import`); `backup:` (flat list of site state `prj backup` collects). These five declarations are **fully independent**: each is consumed only by its own command, with **no** cross-declaration derivation.
+- `sys-prj.yml`: `SysConf` — `test_envs` (deps: `dep_root` + `deps`); `pkg_include:` (extra paths pulled into the package beyond git-tracked/`--full`; mainly default mode; `pkg_exclude` wins); `pkg_exclude:` (glob list skipped by `sys package` in both modes; legacy alias `ignore`); `protect:` (site state: `sys resolve`/`prj sync`/`prj upgrade` never overwrite/delete it; legacy alias `preserve`); `contract:` (external contract: non-rebuildable public site facts, **independent** of the others — implies **no** `protect`/`backup`/packaging behavior, handled only by `prj contract export`/`import`); `backup:` (flat list of site state `prj backup` collects). These five declarations are **fully independent**: each is consumed only by its own command, with **no** cross-declaration derivation.
 - `sys/sys_model.yml`: system definition (`name` / `model` optional / `kind` / `vender`); `kind` defaults to `gxl` and is **omitted from the file when it is `gxl`** (only `docker-compose` is serialized).
 - `sys/mod_list.yml`: module list (optional for pure compose).
 - `sys/setting/vars.yml`: system variable definitions (source, versioned).
-- `sys/merged_vars.yml`: aggregated vars — module vars ⊕ system vars (generated by `sys update`; must be committed — required by `prj import`).
+- `sys/merged_vars.yml`: aggregated vars — module vars ⊕ system vars (generated by `sys resolve`; must be committed — required by `prj import`).
 - `sys/workflows/`: GXL ops flows (optional for pure compose).
 - `sys/setting/list.yml`: per-module localize list (optional).
-- `values/sys_value.yml`: value file generated by `sys update` as a **fully commented template** (inert by default; uncomment to override).
+- `values/sys_value.yml`: value file generated by `sys resolve` as a **fully commented template** (inert by default; uncomment to override).
 - `values/value.yml`: customer override (versioned — keep this; ignore generated value files).
-- `values/<mod>/mod_value.yml`: per-module value templates written by `sys update` (module-scope vars kept **per module**, so same-named vars across modules do not collide).
-- `sys/<model>/mods/<name>/`: modules materialized by `sys update` from each ref's `addr`, grouped by target model (gitignored).
+- `values/<mod>/mod_value.yml`: per-module value templates written by `sys resolve` (module-scope vars kept **per module**, so same-named vars across modules do not collide).
+- `sys/<model>/mods/<name>/`: modules materialized by `sys resolve` from each ref's `addr`, grouped by target model (gitignored).
 - `deliver.lock`: deliver lock written by `sys package` (see Delivery audits).
 - `.env`: generated (gitignored), non-secret config only.
 - `sys/docker-compose.yaml`: system-level compose definition (`sys new` generates a template). `gops sys` resolves it through a fallback chain (incl. the legacy system-root layout) — see System type dispatch.
@@ -409,21 +407,20 @@ Secrets are NOT written to `.env`. Use `${SEC_xxx}` placeholders in the compose 
 
 ## Values / localize flow
 
-1. `sys update` resolves variables → `sys/merged_vars.yml` (system defaults) and generates `values/sys_value.yml` as a **fully commented template** (inert by default): uncomment the entries you want to override.
+1. `sys resolve` resolves variables → `sys/merged_vars.yml` (system defaults) and generates `values/sys_value.yml` as a **fully commented template** (inert by default): uncomment the entries you want to override.
 2. `sys localize` builds `.env` = `sys/merged_vars.yml` defaults ⊕ `values/sys_value.yml` ⊕ `values/value.yml`.
 
 Both value files are **optional and may be partial**: list only the entries you want to override; the rest fall back to the system defaults. In an ops project, put your deltas in `values/<sys_name>/sys_value.yml`.
 
 To see **which** values are overridden and by which layer, use `gops sys diff` (per system) or `gops mod diff` (per module model) — same table `localize` prints at the end.
 
-`sys localize` 默认先解析变量（等价于先跑一次 `sys update`），所以新系统一条 `sys localize` 就够；`--only` 跳过解析（用现有 `sys/merged_vars.yml`，缺失则报错）。显式 `sys update` 仍适用于打包前预解析、打印变量参考等场景。
+`sys localize` 默认先解析变量（等价于先跑一次 `sys resolve`），所以新系统一条 `sys localize` 就够；`--only` 跳过解析（用现有 `sys/merged_vars.yml`，缺失则报错）。显式 `sys resolve` 仍适用于打包前预解析、打印变量参考等场景。
 
-Inside an ops project: when the system dir sits under a project root whose `ops-prj.yml` lists it, `sys localize` / `sys update` read and write the project values at `values/<sys_name>/` (resolved from `ops-prj.yml`), so customer values win even if `<sys>/values` is not a symlink. Run `gops prj sync` to (re)establish the `<sys>/values` symlink (it also imports a missing system dir).
+Inside an ops project: when the system dir sits under a project root whose `ops-prj.yml` lists it, `sys localize` / `sys resolve` read and write the project values at `values/<sys_name>/` (resolved from `ops-prj.yml`), so customer values win even if `<sys>/values` is not a symlink. Run `gops prj sync` to (re)establish the `<sys>/values` symlink (it also imports a missing system dir).
 
-## Delivery audits (drift & lock)
+## Delivery audits (diff & lock)
 
-- **`gops sys check`** — read-only **drift** report. Re-computes the merged values (same order as `sys localize`) and diffs them against the existing `<sys>/.env`, printing `KEY: old -> new` / `+key` / `-key`. Exit≠0 when drifted ("values changed but not re-localized"); exits 0 with `[INFO] 尚无 .env 基线` when never localized. No reconcile.
-- **`gops sys diff` / `gops mod diff`** — read-only **value-change table** (initial defaults vs effective), answering *which* values are overridden and by which layer (origin) — not the same question as `check` (`.env` drift vs current merge). See CLI section.
+- **`gops sys diff` / `gops mod diff`** — read-only **value-change table** (initial defaults vs effective), answering *which* values are overridden and by which layer (origin). See CLI section.
 - **`deliver.lock`** — written by `gops sys package` at the system root and shipped inside the tarball. Records `lockfile_version` / `name` / `version` / `kind` / `model` / module refs (`name`/`model`/`enable`/`addr`) and `sha256:` fingerprints of `sys/merged_vars.yml` and the whole `values/` tree. Answers "which version, which values"; `generated_at` changes per package (expect churn).
 - **`gops prj diagnose [--strict]`** — read-only audit of a project's site state and customer-value version-control (see CLI section).
 
@@ -438,11 +435,11 @@ Inside an ops project: when the system dir sits under a project root whose `ops-
 
 `prj import --path <pkg>` imports a packaged system. `<pkg>` must be a local `.tar.gz`, a `.git` / `git@` repo URL, or an http(s) `.tar.gz` / `.git` URL — **NOT a bare directory** (`convert_addr` rejects anything else). The archive must contain a `sys/` dir at its root. Import (and the missing-system branch of `prj sync`) create `<sys>/values` as a symlink to `<project>/values/<sys_name>`.
 
-**Site state** = files inside the system dir that are **not** part of the delivery package and must survive upgrades. Declared in `sys-prj.yml`: `protect:` (never overwritten/deleted by `sys update`/`prj sync`/`prj upgrade`), `backup:` (collected by `prj backup`/`restore`), and `contract:` (external, non-rebuildable public facts, archived separately via `prj contract export`/`import`). These declarations are **fully independent** — each is consumed only by its own command, with **no** cross-declaration derivation/overlap logic. `prj sync` overlays package files only; `prj backup` / `restore` collect/restore site state; `gops prj diagnose` audits each declaration's own completeness.
+**Site state** = files inside the system dir that are **not** part of the delivery package and must survive upgrades. Declared in `sys-prj.yml`: `protect:` (never overwritten/deleted by `sys resolve`/`prj sync`/`prj upgrade`), `backup:` (collected by `prj backup`/`restore`), and `contract:` (external, non-rebuildable public facts, archived separately via `prj contract export`/`import`). These declarations are **fully independent** — each is consumed only by its own command, with **no** cross-declaration derivation/overlap logic. `prj sync` overlays package files only; `prj backup` / `restore` collect/restore site state; `gops prj diagnose` audits each declaration's own completeness.
 
 ## Pitfalls
 
-- Generated files under `values/` are overwritten by `sys update`; keep customer overrides in `values/value.yml` or list them in `values/sys_value.yml` (partial is fine — the rest come from `sys/merged_vars.yml`).
-- `prj import` requires `sys/merged_vars.yml` (generated by `sys update`) to be in the package. `sys package` runs `update` first, but by default packs **only git-tracked files** — so `sys/merged_vars.yml` (and anything else the customer needs) must be **committed**; use `--full` to pack the working tree as-is (incl. artifacts).
+- Generated files under `values/` are overwritten by `sys resolve`; keep customer overrides in `values/value.yml` or list them in `values/sys_value.yml` (partial is fine — the rest come from `sys/merged_vars.yml`).
+- `prj import` requires `sys/merged_vars.yml` (generated by `sys resolve`) to be in the package. `sys package` runs `sys resolve` first, but by default packs **only git-tracked files** — so `sys/merged_vars.yml` (and anything else the customer needs) must be **committed**; use `--full` to pack the working tree as-is (incl. artifacts).
 - A stale PATH `gops` may be an old version; build and use `target/debug/gops` (1.3.0+) for docker-compose type dispatch.
 - `gxl` dispatch shells out to `$HOME/bin/gx` and checks `gx >= 0.13.0`; if the version check fails the deploy commands abort before running.

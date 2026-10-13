@@ -1,5 +1,14 @@
 # 变更日志
 
+## [0.2.16] - 2026-10-13
+
+### gops-engineering：`gops sys` 命令面收敛（`update`→`resolve`；移除 `setting` / `check`）
+
+- `gops sys` 命令面：`update` 更名为 **`resolve`**（旧名 `update` 保留为隐藏别名），语义是「解析系统定义」（取模块 + 解析变量 → `sys/merged_vars.yml`），与「升级运行中的系统」区分
+- 同步更新 `gops-engineering` 的 CLI 说明、「Files」、「Values / localize flow」、「Upgrading gops」与 Pitfalls 等小节
+- **移除 `gops sys setting`**（与 `gops sys new` 重叠）；`gops-engineering` 的 CLI 清单同步移除
+- **移除 `gops sys check`**（只读漂移检查）；其唯一有效部分（变量定义比已解析结果新）并入 `sys localize` 结尾的 `[WARN]`；CLI 清单与「Delivery audits」同步
+
 ## [0.2.15] - 2026-10-12
 
 ### gops-engineering：现场态声明彻底解耦
