@@ -59,8 +59,9 @@ Ops project (`ops-prj.yml`): import a packaged system, keep it in sync over time
 ### gops self
 
 - `gops self status` — current version, install dir, and the last self-update state.
-- `gops self check [--channel stable|alpha|beta] [--json]` — query the channel manifest for a newer release; `--json` prints a machine-readable blob on a banner-free stdout.
-- `gops self update [--channel …] [--to <ver>] [--yes] [--dry-run] [--force]` — download, verify (sha256), install, and back up the current binary; auto-rolls back if the new `--version` health check fails.
+- `gops self check [--channel stable|alpha|beta] [--mirror <PRESET|URL>] [--json]` — query the channel manifest for a newer release; `--json` prints a machine-readable blob on a banner-free stdout.
+- `gops self update [--channel …] [--to <ver>] [--yes] [--dry-run] [--force] [--mirror <PRESET|URL>]` — download, verify (sha256), install, and back up the current binary; auto-rolls back if the new `--version` health check fails.
+- `--mirror <PRESET|URL>` (on `check` / `update`) — route the manifest + artifact download through a mirror prefix: preset `githubproxy` (expands to `https://githubproxy.cc/`) or a custom prefix URL. Only the download URLs are rewritten (absolute `http(s)` only) and the sha256 check is unchanged; an **unknown preset name is rejected** with a clear error (it is not used as a bare URL). Handy when GitHub is slow/blocked in your network.
 - `gops self rollback [--id <14-digit>]` — restore the most recent (or given) backup.
 - Source of truth is the same `galaxio-labs/get` manifest as `inst-x.sh gops <channel>`; state/lock/backups live in `~/.galaxy/self_update/gops` (namespaced apart from `gx`).
 - Upgrading the binary is only part of the work — see **Upgrading gops** below for the post-upgrade migration steps.

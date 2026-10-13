@@ -1,5 +1,13 @@
 # 变更日志
 
+## [0.2.17] - 2026-10-14
+
+### gops-engineering：`gops self` 支持下载镜像 `--mirror`
+
+- `gops self check` / `gops self update` 新增 `--mirror <PRESET|URL>`：把清单与制品下载地址改为经过镜像前缀；内置预设 `githubproxy`（= `https://githubproxy.cc/`），也可传自定义前缀 URL
+- 只重写绝对 `http(s)` 下载地址，`sha256` 校验不变；未知预设名（既非预设也无 `scheme`）直接报错，不会被当作 URL 使用
+- `gops-engineering` 的 `gops self` 小节补充 `--mirror` 用法与语义
+
 ## [0.2.16] - 2026-10-13
 
 ### gops-engineering：`gops sys` 命令面收敛（`update`→`resolve`；移除 `setting` / `check`）
