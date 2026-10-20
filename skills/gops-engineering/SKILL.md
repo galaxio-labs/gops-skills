@@ -1,6 +1,6 @@
 ---
 name: gops-engineering
-description: "Use when working with gops (galaxy-ops): creating/updating/localizing modules, systems and ops projects; module layout and ModelSTD; k8s modules with Helm (helm_ops); the ops-gxl op-flow contract; marking a system as docker-compose type; wiring ${SEC_xxx} secrets; working with sys/sys_model.yml kind, merged_vars.yml, values/value.yml customer overrides; and the ops-project site-state model (gops prj sync/backup/restore/contract/upgrade, sys-prj.yml protect/contract/backup, ops-prj.yml backup/contract)."
+description: "Use when working with gops (galaxy-ops): creating/updating/localizing modules, systems and ops projects; module layout and ModelSTD; k8s modules with Helm (helm_ops); the ops-gxl op-flow contract; marking a system as docker-compose type; secret handling (`sys-prj.yml: secrets.file`, `secrets.expose`, `gops sec list|get|run`, `${SEC_xxx}` placeholders); working with sys/sys_model.yml kind, merged_vars.yml, values/value.yml customer overrides; and the ops-project site-state model (gops prj sync/backup/restore/contract/upgrade, sys-prj.yml protect/contract/backup, ops-prj.yml backup/contract)."
 ---
 
 # Gops Engineering
@@ -41,7 +41,16 @@ Three layers: `Module -> System -> Ops Project`.
 
 Runtime operations on the target system (operator-flow contract); dispatch by `sys/sys_model.yml` `kind` — `gxl` → `gx run <cmd>`, `docker-compose` → a `docker compose` subcommand.
 
-- `gops run download|install|uninstall|start|stop|status|diagnose [--mod <module>] [--env <env>]` (`--env` defaults to `default`). Compose mapping: `download`→`pull`, `install`→`create`, `uninstall`→`down`, `start`→`up -d`, `stop`→`stop`, `status`→`ps`, `diagnose`→`config` (secrets injected as `********` masks).
+- `gops run download|install|uninstall|start|stop|status|diagnose [--mod <module>] [--env <env>]` (`--env` defaults to `default`). Compose mapping: `download`→`pull`, `install`→`create`, `uninstall`→`down`, `start`→`up -d`, `stop`→`stop`, `status`→`ps`, `diagnose`→`config`. Secrets (`sys-prj.yml: secrets.file`) are read **only** by `start` / `install` / `diagnose`; `diagnose` injects `********` masks. See **Secrets**.
+
+### gops sec
+
+Read-only view of the secret file plus "run with secrets". All of it goes through the same loader/validator as `gops run` (see **Secrets**).
+
+- `gops sec list [--for run|localize|sec] [--json]` — key names and value **lengths** only (never values). `--for` previews the set a consumer would actually receive after `secrets.expose` filtering.
+- `gops sec get <key> [--show]` — single value, **masked** (`********`) unless `--show`. The key is case-insensitive and may be written with or without the `SEC_` prefix.
+- `gops sec run [--raw] -- <cmd...>` — loads the file, injects `SEC_*` into the child env, `exec`s it. Values never enter argv (`ps` cannot see them) and nothing persists in the shell. `--raw` strips the `SEC_` prefix and lowercases (`SEC_WP_GIT_PUSH_TOKEN` → `wp_git_push_token`).
+- There is deliberately **no `env` subcommand**: emitting `export ...` for `eval` is a command-injection surface (a value containing `$(...)` would execute) and leaves secrets in the interactive shell environment.
 
 ### gops prj
 
@@ -53,14 +62,14 @@ Ops project (`ops-prj.yml`): import a packaged system, keep it in sync over time
 - `gops prj backup` — collect **site state** = each system's `sys-prj.yml` `backup:` (**not** `contract:` — contracts have their own archive) plus project `ops-prj.yml` `backup:` target/keep/per-system include·exclude, into one archive (manifest + sha256; key-bearing entries are flagged for off-box storage); keeps the last `keep`.
 - `gops prj restore [<archive>] [--list] [--dry-run]` — merge a backup archive back into the site (unpack to temp, then overwrite). `--list` only lists; `--dry-run` unpacks to verify without touching the site.
 - `gops prj contract export` / `gops prj contract import <archive>` — archive / restore the **external contracts** (`sys-prj.yml` `contract:`) to/from the `ops-prj.yml` `contract:` target (target / keep).
-- `gops prj upgrade [<sys>] --to <version|addr> --on-failure rollback-all|halt [--dry-run] [--health-cmd …] [--json]` — **transactional release upgrade** (kind: docker-compose only): diagnose → backup → apply → regenerate (`sys resolve`+`localize`) → pull → up → health, with failure policy per `--on-failure`.
+- `gops prj upgrade [<sys>] [<spec>] [-v|--version <spec>] [-c|--channel stable|alpha|beta] [--to <url|path>] [--on-failure rollback-all|halt] [--dry-run] [--health-cmd …] [--json] [--no-save]` — **transactional release upgrade** (kind: docker-compose only): diagnose → backup → apply → regenerate (`sys resolve`+`localize`) → pull → up → health, with failure policy per `--on-failure` (default `rollback-all`; `halt` must be explicit). `<spec>` = `latest|patch|minor(feat)|major|X.Y.Z`; keyword specs are resolved against a version catalog (GitHub Releases / git tags / local package dir / a generic `versions.json` or `versions.txt` next to the versioned HTTP path); for generic HTTP sources without a catalog, `patch`/`minor`/`major` fall back to bounded URL probing (HEAD), while `latest` still requires a catalog and the target package is existence-checked (local `is_file`, HTTP `HEAD` with `GET Range` fallback, git `ls-remote`) **before** diagnose/backup. If all target versions already equal the deployed versions, the command is a no-op (use `--force` to rerun). The concrete version is written back to `ops-prj.yml: version` (`--no-save` opts out); `prj import` auto-templatizes a concrete versioned address (e.g. `pkg-1.0.0.tar.gz` → `pkg-{version}.tar.gz` + `version: 1.0.0`). `--channel` only applies to keyword specs; default is inferred from the deployed version suffix.
 - `gops prj diagnose [--strict]` (**alias `doctor`**) — read-only site-state audit: `values/` tracked by git (exists, per-system `values/<sys>/`, not ignored, no uncommitted changes), duplicate `sys_models`, and each declaration's **own** completeness (e.g. `contract:` paths present). It never reasons **across** declarations. `--strict` escalates warnings to errors (CI gate).
 
 ### gops self
 
 - `gops self status` — current version, install dir, and the last self-update state.
-- `gops self check [--channel stable|alpha|beta] [--mirror <PRESET|URL>] [--json]` — query the channel manifest for a newer release; `--json` prints a machine-readable blob on a banner-free stdout.
-- `gops self update [--channel …] [--to <ver>] [--yes] [--dry-run] [--force] [--mirror <PRESET|URL>]` — download, verify (sha256), install, and back up the current binary; auto-rolls back if the new `--version` health check fails.
+- `gops self check [-c|--channel stable|alpha|beta] [--mirror <PRESET|URL>] [--json]` — query the channel manifest for a newer release; `--json` prints a machine-readable blob on a banner-free stdout.
+- `gops self update [-c|--channel …] [--to <ver>] [--yes] [--dry-run] [--force] [--mirror <PRESET|URL>]` — download, verify (sha256), install, and back up the current binary; auto-rolls back if the new `--version` health check fails.
 - `--mirror <PRESET|URL>` (on `check` / `update`) — route the manifest + artifact download through a mirror prefix: preset `githubproxy` (expands to `https://githubproxy.cc/`) or a custom prefix URL. Only the download URLs are rewritten (absolute `http(s)` only) and the sha256 check is unchanged; an **unknown preset name is rejected** with a clear error (it is not used as a bare URL). Handy when GitHub is slow/blocked in your network.
 - `gops self rollback [--id <14-digit>]` — restore the most recent (or given) backup.
 - Source of truth is the same `galaxio-labs/get` manifest as `inst-x.sh gops <channel>`; state/lock/backups live in `~/.galaxy/self_update/gops` (namespaced apart from `gx`).
@@ -382,7 +391,7 @@ vender: ''
 
 ## Files
 
-- `sys-prj.yml`: `SysConf` — `test_envs` (deps: `dep_root` + `deps`); `pkg_include:` (extra paths pulled into the package beyond git-tracked/`--full`; mainly default mode; `pkg_exclude` wins); `pkg_exclude:` (glob list skipped by `sys package` in both modes; legacy alias `ignore`); `protect:` (site state: `sys resolve`/`prj sync`/`prj upgrade` never overwrite/delete it; legacy alias `preserve`); `contract:` (external contract: non-rebuildable public site facts, **independent** of the others — implies **no** `protect`/`backup`/packaging behavior, handled only by `prj contract export`/`import`); `backup:` (flat list of site state `prj backup` collects). These five declarations are **fully independent**: each is consumed only by its own command, with **no** cross-declaration derivation.
+- `sys-prj.yml`: `SysConf` — `test_envs` (deps: `dep_root` + `deps`); `pkg_include:` (extra paths pulled into the package beyond git-tracked/`--full`; mainly default mode; `pkg_exclude` wins); `pkg_exclude:` (glob list skipped by `sys package` in both modes; legacy alias `ignore`); `protect:` (site state: `sys resolve`/`prj sync`/`prj upgrade` never overwrite/delete it; legacy alias `preserve`); `contract:` (external contract: non-rebuildable public site facts, **independent** of the others — implies **no** `protect`/`backup`/packaging behavior, handled only by `prj contract export`/`import`); `backup:` (flat list of site state `prj backup` collects); `secrets:` (`file` / `format` / `expose` — where the key file lives and which consumer gets which keys; see **Secrets**). These declarations are **fully independent**: each is consumed only by its own command, with **no** cross-declaration derivation.
 - `sys/sys_model.yml`: system definition (`name` / `model` optional / `kind` / `vender`); `kind` defaults to `gxl` and is **omitted from the file when it is `gxl`** (only `docker-compose` is serialized).
 - `sys/mod_list.yml`: module list (optional for pure compose).
 - `sys/setting/vars.yml`: system variable definitions (source, versioned).
@@ -397,14 +406,54 @@ vender: ''
 - `.env`: generated (gitignored), non-secret config only.
 - `sys/docker-compose.yaml`: system-level compose definition (`sys new` generates a template). `gops sys` resolves it through a fallback chain (incl. the legacy system-root layout) — see System type dispatch.
 
-## Secrets (docker-compose)
+## Secrets
 
-Secrets are NOT written to `.env`. Use `${SEC_xxx}` placeholders in the compose file (`sys/docker-compose.yaml` by default):
+Secrets never go into `.env`, `values/`, or `vars.yml`. Declare the key file in the system manifest and reference the keys as `${SEC_xxx}` placeholders in `sys/docker-compose.yaml` and/or `sys/configs/**` templates:
 
-- `sys start` loads secrets from `~/.galaxy/sec_value.yml` (or `./.galaxy/sec_value.yml`) via `orion_sec::load_sec_dict()`, injecting `SEC_*` env vars into the `docker compose` subprocess (not persisted to disk).
-- Keys normalize to uppercase with a `SEC_` prefix (`db_password` → `SEC_DB_PASSWORD`).
-- `sys diagnose` (`docker compose config`) injects masked `********` instead of plaintext.
-- `sys localize` exports only non-secret config to `.env`.
+```yaml
+# sys-prj.yml
+secrets:
+  file: .wist/sec-value.yml     # relative to the system root (required once the block exists)
+  format: yaml                  # optional: yaml (default) | toml
+  expose:                       # optional: per-consumer injection scope
+    run: all                    # default: all
+    localize:                   # default: none (must be opted in)
+      - SEC_CENTER_*
+      - SEC_STATION_DB_PASSWORD
+```
+
+### Where the file comes from
+
+1. `secrets.file` declared → that file **must exist**. Missing = hard error; there is **no** fallback to any other file (a silent fallback would inject another stack's secrets).
+2. no `secrets:` block → legacy `.galaxy/sec_value.yml`, looked up at `<system root>` → `cwd` → `$HOME`; missing → empty set.
+
+Key names normalize to uppercase with a `SEC_` prefix and are idempotent (`center_admin_token` and `SEC_CENTER_ADMIN_TOKEN` both become `SEC_CENTER_ADMIN_TOKEN`). The manifest never lists key names or values.
+
+### Validation (fail-closed, before any key is handed out)
+
+- path must be **relative to the system root**: no `.`/`..`, no absolute path, no symlink component (dangling links are reported as such); regular file, ≤ 1 MiB;
+- permissions must be **owner-only** (`0600`/`0400`); owner must be the current euid (skipped when running as root); `nlink == 1` — hard links are rejected (they can pull in a file from outside the root);
+- values must be **scalar strings**: YAML rewrites `123456` (integer), `0123` (drops the leading zero), `1e5` (float) and turns nested maps into a literal `obj...` — quote them; violating keys are rejected by name;
+- normalized keys must be valid env names (`[A-Za-z_][A-Za-z0-9_]*`), so `db.password` is rejected;
+- parse errors report position only; values never appear in errors or in `Debug` output.
+
+### Injection points
+
+| Entry | Scope used | Notes |
+|---|---|---|
+| `gops run start` / `install` / `diagnose` | `expose.run` | injected into the `docker compose` child env; `diagnose` injects `********` masks |
+| `gops run download` / `stop` / `status` / `uninstall` | — | the file is **not read**, so a broken/permission-wrong secret file never blocks stop/status |
+| `gops sec run -- <cmd>` | `expose.sec` | `exec`, env only (values never enter argv) |
+| `gops sys localize` | `expose.localize` | reserved for opt-in use by localize flows/scripts |
+| `gops sec list` / `get` | (unfiltered) | read-only inspection; `get` is masked unless `--show` |
+
+### `secrets.expose` semantics
+
+`all` (default for `run` and `sec`), a list of patterns matched against the **normalized** name, or `[]` = inject nothing. Patterns support only `*` (any sequence, may match empty) and are case-insensitive. Unknown consumer names / unknown fields are rejected at manifest parse time; a pattern matching nothing logs `[WARN]` (key renamed?). `gops sec list --for <consumer>` previews the filtered set.
+
+### Container caveat
+
+Scripts that run **inside** containers cannot use `gops sec`: there is no `gops` binary in the image, and a bind-mounted secret file is owned by the host deploy account while the container runs as another uid — the owner check would (correctly) reject it. Parse the file locally there (e.g. the one-shot `db-init` job in a compose stack).
 
 ## Values / localize flow
 
@@ -444,3 +493,6 @@ Inside an ops project: when the system dir sits under a project root whose `ops-
 - `prj import` requires `sys/merged_vars.yml` (generated by `sys resolve`) to be in the package. `sys package` runs `sys resolve` first, but by default packs **only git-tracked files** — so `sys/merged_vars.yml` (and anything else the customer needs) must be **committed**; use `--full` to pack the working tree as-is (incl. artifacts).
 - A stale PATH `gops` may be an old version; build and use `target/debug/gops` (1.3.0+) for docker-compose type dispatch.
 - `gxl` dispatch shells out to `$HOME/bin/gx` and checks `gx >= 0.13.0`; if the version check fails the deploy commands abort before running.
+- Secrets: never put them in `values/` or `vars.yml`; declare `sys-prj.yml: secrets.file` and quote every value (`0600` file, no symlink/hard link). A wrong mode or a numeric-looking value is a **hard error**, not a warning.
+- `gops run status|stop|download|uninstall` deliberately do **not** read the secret file — do not "fix" a failing `status` by changing secret permissions.
+- Scripts running **inside containers** cannot call `gops sec` (no binary, and the bind-mounted file's owner differs from the container uid); parse locally there.

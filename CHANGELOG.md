@@ -1,5 +1,14 @@
 # 变更日志
 
+## [0.2.18] - 2026-10-20
+
+### gops-engineering：安全变量的声明、读取与最小权限
+
+- 新增 **`gops sec`** 小节：`list`（只出键名与长度；`--for <消费方>` 预览过滤后的集合）/ `get`（默认掩码 `********`，`--show` 才明文）/ `run`（注入子进程环境后 `exec`，值不进 argv）；明确**不提供** `env` 子命令（`eval` 是命令注入面，且会让密钥长期留在 shell 环境）
+- **`## Secrets` 重写**：`sys-prj.yml: secrets.file` 声明与解析顺序（声明了就必存在、不回退；未声明才走 `.galaxy/sec_value.yml`）；fail-closed 校验（相对路径 / 禁符号链接与硬链接 / 0600 / 只接受标量字符串 / 合法环境变量名 / 错误不输出明文）；注入点表格（`gops run` 仅 `start`/`install`/`diagnose` 读密钥，`diagnose` 注入掩码）；容器内为什么不能用 `gops sec`
+- 新增 **`secrets.expose`**：按消费方（`run` / `localize` / `sec`）裁剪注入范围，只支持 `*`；`run`/`sec` 缺省全量、`localize` 缺省**不注入**；未知消费方/字段在解析清单时直接报错
+- `sys-prj.yml` 字段表补充 `secrets:`；`gops run` 小节、skill `description` 与 README 同步
+
 ## [0.2.17] - 2026-10-14
 
 ### gops-engineering：`gops self` 支持下载镜像 `--mirror`
