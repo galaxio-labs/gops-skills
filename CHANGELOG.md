@@ -1,5 +1,16 @@
 # 变更日志
 
+## [0.2.19] - 2026-11-09
+
+### gops-engineering：升级可清理旧版本残渣（`deliver.lock` v2 + `prj sync --prune`）
+
+- **`deliver.lock` 升级到 v2**：新增 `files: [{path, sha256}]` 包内文件清单（不含 `deliver.lock` 自身；符号链接按链接目标文本取指纹）。清单与 tarball 由**同一份**文件选择产出（git 模式 / `--full` / `pkg_include` / `pkg_exclude` 一致），不会各算一遍。v1 锁仍可读（`files` 缺省为空）。
+- **`gops prj sync --prune`**（默认关闭）：清掉「上一版包内有、这一版包外」的残渣，但只删**仍与旧清单逐字节一致**（未本地改动）且不在 `protect:` 里的文件；本地改过的保留并列入 `kept_modified`。不加 `--prune` 时仍然一个文件都不删。
+- **`gops prj upgrade`** 的 apply 阶段固定清理同类残渣（有备份/回滚语境）。这是**行为变化**：以前只覆盖、不删。
+- 清理的安全边界：锁里只认纯相对路径（拒绝绝对路径 / `..`）、跳过顶层 `values` 与 `deliver.lock`、祖先为符号链接或已非普通文件的条目一律不碰、空目录自下而上回收。
+- 文档同步：CLI 两个命令、`Delivery audits`（`deliver.lock` v2）、site-state 小节（清理 ≠ 现场态管理）、`Upgrading gops` 的 breaking / 行为变更表新增 2.11 行、Pitfalls 补充「v1 锁首轮不清理」「种子文件会让已删文件复活」。
+- 顺带修正顶层 router 里对已移除命令 `gops sys check` 的引用（改为 `gops sys diff`）。
+
 ## [0.2.18] - 2026-10-20
 
 ### gops-engineering：安全变量的声明、读取与最小权限
